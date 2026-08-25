@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: Version bump type
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.ref_name == 'main'
+    uses: rincorpes/rincorpes-workflows/.github/workflows/pypi-release.yml@main
+    with:
+      bump_type: ${{ inputs.bump_type }}
+      stable_branch: main
+      working_directory: .
+      python_version: "3.13"
+    secrets:
+      PACKAGE_INDEX_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_CHANNEL_ID_RELEASE: ${{ secrets.SLACK_CHANNEL_ID_RELEASE }}
+      DISCORD_WEBHOOK_URL_RELEASE: ${{ secrets.DISCORD_WEBHOOK_URL_RELEASE }}
