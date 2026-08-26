@@ -12,4 +12,4 @@ class ForumResource(GeneratedForumResourceMixin, Resource[Forum]):
         super().__init__(wrapper.forum)
 
 
-ResourceRegistry.register('forum', ForumResource)
+ResourceRegistry.register("forum", ForumResource)

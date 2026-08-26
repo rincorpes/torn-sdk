@@ -12,4 +12,4 @@ class UserResource(GeneratedUserResourceMixin, Resource[User]):
         super().__init__(wrapper.user)
 
 
-ResourceRegistry.register('user', UserResource)
+ResourceRegistry.register("user", UserResource)

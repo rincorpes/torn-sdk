@@ -12,4 +12,4 @@ class KeyResource(GeneratedKeyResourceMixin, Resource[Key]):
         super().__init__(wrapper.key)
 
 
-ResourceRegistry.register('key', KeyResource)
+ResourceRegistry.register("key", KeyResource)

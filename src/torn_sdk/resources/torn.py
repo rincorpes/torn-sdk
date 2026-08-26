@@ -12,4 +12,4 @@ class TornResource(GeneratedTornResourceMixin, Resource[Torn]):
         super().__init__(wrapper.torn)
 
 
-ResourceRegistry.register('torn', TornResource)
+ResourceRegistry.register("torn", TornResource)

@@ -12,4 +12,4 @@ class RacingResource(GeneratedRacingResourceMixin, Resource[Racing]):
         super().__init__(wrapper.racing)
 
 
-ResourceRegistry.register('racing', RacingResource)
+ResourceRegistry.register("racing", RacingResource)

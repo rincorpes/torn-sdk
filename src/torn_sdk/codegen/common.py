@@ -48,7 +48,9 @@ class PythonNames:
     @classmethod
     def pascal(cls, value: str) -> str:
         parts = [part for part in cls.snake(value).split("_") if part]
-        return "".join(part[:1].upper() + part[1:] for part in parts) or "Value"
+        return (
+            "".join(part[:1].upper() + part[1:] for part in parts) or "Value"
+        )
 
     @classmethod
     def identifier(cls, value: str) -> tuple[str, str | None]:
@@ -262,9 +264,7 @@ class SchemaExampleFactory:
             return non_null[0] if non_null else None
 
         if "allOf" in schema:
-            return self._all_of(
-                schema["allOf"], name_hint, depth, ref_stack
-            )
+            return self._all_of(schema["allOf"], name_hint, depth, ref_stack)
 
         if "oneOf" in schema:
             return self._first_branch(
@@ -390,7 +390,10 @@ class SchemaExampleFactory:
             return None
         for branch in branches:
             resolved = self.refs.resolve(branch)
-            if isinstance(resolved, Mapping) and resolved.get("type") == "null":
+            if (
+                isinstance(resolved, Mapping)
+                and resolved.get("type") == "null"
+            ):
                 continue
             return self.build(
                 branch,

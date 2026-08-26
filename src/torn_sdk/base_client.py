@@ -1,3 +1,7 @@
+"""
+Client shared functionality
+"""
+
 from __future__ import annotations
 
 from typing import Any, Generic, TypeVar
@@ -7,6 +11,15 @@ RawT = TypeVar("RawT")
 
 
 class BaseTornClient(Generic[WrapperT, RawT]):
+    """
+    Base class for Torn SDK Clients
+
+    Attributes:
+        wrapper (WrapperT): Raw API Transport
+        raw (RawT): Typed access to the underlying transport resources
+
+    """
+
     raw: RawT
 
     def __init__(

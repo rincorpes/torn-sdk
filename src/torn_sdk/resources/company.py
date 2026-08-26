@@ -12,4 +12,4 @@ class CompanyResource(GeneratedCompanyResourceMixin, Resource[Company]):
         super().__init__(wrapper.company)
 
 
-ResourceRegistry.register('company', CompanyResource)
+ResourceRegistry.register("company", CompanyResource)

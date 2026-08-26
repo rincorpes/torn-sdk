@@ -12,4 +12,4 @@ class FactionResource(GeneratedFactionResourceMixin, Resource[Faction]):
         super().__init__(wrapper.faction)
 
 
-ResourceRegistry.register('faction', FactionResource)
+ResourceRegistry.register("faction", FactionResource)

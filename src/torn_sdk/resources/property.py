@@ -4,7 +4,9 @@ from TornAPIWrapper import TornAPIWrapper
 from TornAPIWrapper.endpoints.property import Property
 
 from torn_sdk.core.resource import Resource, ResourceRegistry
-from torn_sdk.resources._generated.property import GeneratedPropertyResourceMixin
+from torn_sdk.resources._generated.property import (
+    GeneratedPropertyResourceMixin,
+)
 
 
 class PropertyResource(GeneratedPropertyResourceMixin, Resource[Property]):
@@ -12,4 +14,4 @@ class PropertyResource(GeneratedPropertyResourceMixin, Resource[Property]):
         super().__init__(wrapper.property)
 
 
-ResourceRegistry.register('property', PropertyResource)
+ResourceRegistry.register("property", PropertyResource)

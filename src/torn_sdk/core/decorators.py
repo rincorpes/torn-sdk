@@ -1,3 +1,7 @@
+"""
+Endpoint decorators
+"""
+
 from __future__ import annotations
 
 from functools import wraps
@@ -17,19 +21,36 @@ from pydantic import BaseModel
 from .endpoint import EndpointSpec
 from .parser import ResponseParser
 
+# Justification: Types should be PascalCase
+# pylint: disable=invalid-name
 ParamsT = ParamSpec("ParamsT")
 ReturnT = TypeVar("ReturnT", bound=BaseModel)
+# pylint: enable=invalid-name
 
 
 class EndpointResource(Protocol):
-    def _call_endpoint(
+    """
+    Endpoint resource protocol for typed access without circular dependency
+    """
+
+    def call_endpoint(
         self,
         method: str,
         *args: Any,
         **kwargs: Any,
-    ) -> Any: ...
+    ) -> Any:
+        """
+        Executes the method from the API transport
+
+        Attrs:
+            method (str): Name of the method to execute
+            *args: List of positional arguments for the method
+            **kwargs: Keyword arguments for the method
+        """
 
 
+# Justification: Endpoint spec builder by default should accept multiple arguments
+# pylint: disable=too-many-arguments
 def _build_endpoint_spec(
     func: Callable[..., Any],
     *,
@@ -66,6 +87,9 @@ def _build_endpoint_spec(
     )
 
 
+# pylint: enable=too-many-arguments
+
+
 def endpoint(
     *,
     method: str | None = None,
@@ -77,6 +101,21 @@ def endpoint(
     [Callable[ParamsT, ReturnT]],
     Callable[ParamsT, ReturnT],
 ]:
+    """
+    Synchronous endpoint decorator
+
+    Attrs:
+        method (str | None): Class method name
+        extract (str | None): key to extract from raw result
+        extract_path (tuple[str, ...]): For recursive extraction
+        extractor (Callable[[Any], Any]): Custom extraction function
+        extract_default (bool): Returns the data as it is.
+
+    Returns:
+        Callable[[Callable[ParamsT, ReturnT]],Callable[ParamsT, ReturnT],]:
+            The Client method
+    """
+
     def decorator(
         func: Callable[ParamsT, ReturnT],
     ) -> Callable[ParamsT, ReturnT]:
@@ -95,7 +134,7 @@ def endpoint(
             *args: Any,
             **kwargs: Any,
         ) -> ReturnT:
-            response = self._call_endpoint(
+            response = self.call_endpoint(
                 spec.method,
                 *args,
                 **kwargs,
@@ -122,6 +161,21 @@ def async_endpoint(
     [Callable[ParamsT, Awaitable[ReturnT]]],
     Callable[ParamsT, Awaitable[ReturnT]],
 ]:
+    """
+    Asynchronous endpoint decorator
+
+    Attrs:
+        method (str | None): Class method name
+        extract (str | None): key to extract from raw result
+        extract_path (tuple[str, ...]): For recursive extraction
+        extractor (Callable[[Any], Any]): Custom extraction function
+        extract_default (bool): Returns the data as it is.
+
+    Returns:
+        Callable[[Callable[ParamsT, Awaitable[ReturnT]]],Callable[ParamsT, Awaitable[ReturnT]],]:
+            The Client method
+    """
+
     def decorator(
         func: Callable[ParamsT, Awaitable[ReturnT]],
     ) -> Callable[ParamsT, Awaitable[ReturnT]]:
@@ -142,7 +196,7 @@ def async_endpoint(
         ) -> ReturnT:
             response = await cast(
                 Awaitable[Any],
-                self._call_endpoint(
+                self.call_endpoint(
                     spec.method,
                     *args,
                     **kwargs,

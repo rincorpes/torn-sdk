@@ -54,6 +54,11 @@ force-exclude = '''(
 |^build
 |^dist
 |^docs
+|^src/torn_sdk/client\.py$
+|^src/torn_sdk/client_async\.py$
+|^src/torn_sdk/models/
+|^src/torn_sdk/resources/_generated/
+|^src/torn_sdk/resources/__init__\.py$
 )'''
 
 [tool.isort]
@@ -64,6 +69,13 @@ known_first_party = [
     "torn_sdk",
 ]
 skip = [".venv", "venv", "env", "build", "dist", "docs"]
+skip_glob = [
+    "src/torn_sdk/client.py",
+    "src/torn_sdk/client_async.py",
+    "src/torn_sdk/models/**",
+    "src/torn_sdk/resources/_generated/**",
+    "src/torn_sdk/resources/__init__.py",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -98,4 +110,9 @@ ignore-paths = [
     "^build",
     "^dist",
     "^docs",
+    "^src/torn_sdk/client\\.py$",
+    "^src/torn_sdk/client_async\\.py$",
+    "^src/torn_sdk/models/",
+    "^src/torn_sdk/resources/_generated/",
+    "^src/torn_sdk/resources/__init__\\.py$",
 ]

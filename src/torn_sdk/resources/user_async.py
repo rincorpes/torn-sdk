@@ -4,7 +4,9 @@ from TornAPIWrapper import TornAPIWrapperAsync
 from TornAPIWrapper.endpoints_async.user import User
 
 from torn_sdk.core.resource import AsyncResource, AsyncResourceRegistry
-from torn_sdk.resources._generated.user_async import GeneratedAsyncUserResourceMixin
+from torn_sdk.resources._generated.user_async import (
+    GeneratedAsyncUserResourceMixin,
+)
 
 
 class AsyncUserResource(GeneratedAsyncUserResourceMixin, AsyncResource[User]):
@@ -12,4 +14,4 @@ class AsyncUserResource(GeneratedAsyncUserResourceMixin, AsyncResource[User]):
         super().__init__(wrapper.user)
 
 
-AsyncResourceRegistry.register('user', AsyncUserResource)
+AsyncResourceRegistry.register("user", AsyncUserResource)

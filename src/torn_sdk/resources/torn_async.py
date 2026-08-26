@@ -4,7 +4,9 @@ from TornAPIWrapper import TornAPIWrapperAsync
 from TornAPIWrapper.endpoints_async.torn import Torn
 
 from torn_sdk.core.resource import AsyncResource, AsyncResourceRegistry
-from torn_sdk.resources._generated.torn_async import GeneratedAsyncTornResourceMixin
+from torn_sdk.resources._generated.torn_async import (
+    GeneratedAsyncTornResourceMixin,
+)
 
 
 class AsyncTornResource(GeneratedAsyncTornResourceMixin, AsyncResource[Torn]):
@@ -12,4 +14,4 @@ class AsyncTornResource(GeneratedAsyncTornResourceMixin, AsyncResource[Torn]):
         super().__init__(wrapper.torn)
 
 
-AsyncResourceRegistry.register('torn', AsyncTornResource)
+AsyncResourceRegistry.register("torn", AsyncTornResource)

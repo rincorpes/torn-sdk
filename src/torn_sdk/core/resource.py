@@ -1,10 +1,16 @@
+"""
+Torn SDK Base resource classes and registry
+"""
+
 from __future__ import annotations
 
 from abc import ABC
 from typing import Any, Callable, Generic, TypeVar, cast
 
-from onomasticon import ImplementationRegistry
+from onomasticon import ImplementationRegistry  # pylint: disable=import-error
 
+# Justification: Types should be PascalCase
+# pylint: disable=invalid-name
 WrapperT = TypeVar("WrapperT")
 
 
@@ -12,7 +18,7 @@ class BaseResource(ABC, Generic[WrapperT]):
     def __init__(self, wrapper: WrapperT) -> None:
         self._wrapper = wrapper
 
-    def _call_endpoint(
+    def call_endpoint(
         self,
         method: str,
         *args: Any,

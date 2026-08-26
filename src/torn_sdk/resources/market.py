@@ -12,4 +12,4 @@ class MarketResource(GeneratedMarketResourceMixin, Resource[Market]):
         super().__init__(wrapper.market)
 
 
-ResourceRegistry.register('market', MarketResource)
+ResourceRegistry.register("market", MarketResource)
