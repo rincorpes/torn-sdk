@@ -65,10 +65,22 @@ CLIENT_CUSTOM_CLASS_START = "# <torn-sdk:custom-class>"
 CLIENT_CUSTOM_CLASS_END = "# </torn-sdk:custom-class>"
 
 
+def custom_block(
+    kind: str, *, name: str | None = None, indent: str = ""
+) -> list[str]:
+    """Render a user-owned region whose contents survive regeneration."""
+    suffix = f" {name}" if name else ""
+    return [
+        f"{indent}# <torn-sdk:custom-{kind}{suffix}>",
+        f"{indent}# </torn-sdk:custom-{kind}{suffix}>",
+    ]
+
+
 def generated_module_header(description: str) -> list[str]:
     """Create a standard header with a Python-recognized module docstring."""
     return [
         f'"""{description}"""',
+        *custom_block("header"),
         GENERATED_HEADER,
         "from __future__ import annotations",
         "",
@@ -105,7 +117,7 @@ class GeneratedSourceFormatter:
 
     def format(self, source: str) -> str:
         """Format generated source without writing outside the generator root."""
-        source, custom_header = self._extract_client_custom_header(source)
+        source, custom_header = self._extract_custom_header(source)
         # Supplying a generated file path makes isort reapply skip_glob rules.
         # The explicit config retains project import settings without skipping.
         sorted_source = self.isort.code(source, config=self.isort_config)
@@ -119,11 +131,11 @@ class GeneratedSourceFormatter:
         return formatted
 
     @staticmethod
-    def _extract_client_custom_header(source: str) -> tuple[str, str | None]:
-        """Temporarily remove a client header block before import sorting."""
+    def _extract_custom_header(source: str) -> tuple[str, str | None]:
+        """Temporarily remove a custom header block before import sorting."""
         pattern = re.compile(
-            rf"^{re.escape(CLIENT_CUSTOM_HEADER_START)}$\n"
-            rf".*?^{re.escape(CLIENT_CUSTOM_HEADER_END)}$\n*",
+            r"^# <torn-sdk:custom-header>$\n"
+            r".*?^# </torn-sdk:custom-header>$\n*",
             flags=re.MULTILINE | re.DOTALL,
         )
         match = pattern.search(source)
@@ -132,6 +144,29 @@ class GeneratedSourceFormatter:
         header = match.group(0).rstrip()
         source_without_header = source[: match.start()] + source[match.end() :]
         return source_without_header, header
+
+
+def merge_custom_blocks(path: Path, source: str) -> str:
+    """Carry user-owned marked regions from an existing generated file forward."""
+    if not path.exists():
+        return source
+    existing = path.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"^(?P<start>\s*# <torn-sdk:custom-[^>]+>)$\n"
+        r"(?P<body>.*?)^(?P<end>\s*# </torn-sdk:custom-[^>]+>)$",
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    contents = {
+        match.group("start").strip(): match.group("body")
+        for match in pattern.finditer(existing)
+    }
+
+    def replace(match: re.Match[str]) -> str:
+        start = match.group("start")
+        body = contents.get(start.strip(), match.group("body"))
+        return f"{start}\n{body}{match.group('end')}"
+
+    return pattern.sub(replace, source)
 
 
 @dataclass(frozen=True)
@@ -1874,13 +1909,17 @@ class ModelRenderer:
             type_ref = self.types.resolve_type(schema, source_name=name)
             imports.type_aliases.update(type_ref.aliases)
             imports.pydantic.add("RootModel")
-            return f"class {name}(RootModel[{type_ref.code}]):\n    pass\n"
+            return self._root_model(
+                name, f"RootModel[{type_ref.code}]", schema
+            )
 
         if "oneOf" in schema or "anyOf" in schema:
             type_ref = self.types.resolve_type(schema, source_name=name)
             imports.type_aliases.update(type_ref.aliases)
             imports.pydantic.add("RootModel")
-            return f"class {name}(RootModel[{type_ref.code}]):\n    pass\n"
+            return self._root_model(
+                name, f"RootModel[{type_ref.code}]", schema
+            )
 
         schema_type = schema.get("type")
         if schema_type == "array":
@@ -1892,16 +1931,54 @@ class ModelRenderer:
             )
             imports.type_aliases.update(item_type.aliases)
             if self._item_is_torn_model(items):
-                return f"class {name}(TornListModel[{item_type.code}]):\n    pass\n"
+                return self._root_model(
+                    name, f"TornListModel[{item_type.code}]", schema
+                )
             imports.pydantic.add("RootModel")
-            return (
-                f"class {name}(RootModel[list[{item_type.code}]]):\n    pass\n"
+            return self._root_model(
+                name, f"RootModel[list[{item_type.code}]]", schema
             )
 
         if schema_type == "object" or "properties" in schema:
             return self._render_object(name, schema, imports)
 
         raise ReviewRequired(f"Cannot render model {name}: {schema!r}")
+
+    def _root_model(
+        self, name: str, base: str, schema: Mapping[str, Any]
+    ) -> str:
+        """Render a scalar, union, or list response model with documentation."""
+        lines = [f"class {name}({base}):"]
+        lines.extend(self._docstring_lines(name, schema))
+        lines.extend(custom_block("class", name=name, indent="    "))
+        return "\n".join(lines) + "\n"
+
+    @staticmethod
+    def _model_docstring(name: str, schema: Mapping[str, Any]) -> str:
+        """Use OpenAPI schema text, with a useful fallback for anonymous schemas."""
+        description = str(schema.get("description", "")).strip()
+        return (
+            description or f"Pydantic model for the {name} Torn API response."
+        )
+
+    def _docstring_lines(
+        self,
+        name: str,
+        schema: Mapping[str, Any],
+        *,
+        attributes: Sequence[str] = (),
+    ) -> list[str]:
+        """Render OpenAPI schema documentation as a safe class docstring."""
+        documentation = self._model_docstring(name, schema)
+        escaped = documentation.replace("\\", "\\\\").replace('"""', '\\"""')
+        body = [
+            f"    {line}" if line else "    " for line in escaped.splitlines()
+        ]
+        lines = ['    """', *body]
+        if attributes:
+            lines.extend(["", "    Attributes:", *attributes])
+        lines.append('    """')
+        return lines
 
     def _render_object(
         self, name: str, schema: Mapping[str, Any], imports: ImportSet
@@ -1910,7 +1987,24 @@ class ModelRenderer:
         required = set(schema.get("required", []) or [])
         if not isinstance(properties, dict):
             raise ReviewRequired(f"Model {name} has invalid properties")
+        attributes: list[str] = []
+        if properties:
+            for wire_name, field_schema in properties.items():
+                if not isinstance(field_schema, dict):
+                    continue
+                py_name, _ = PythonNames.identifier(wire_name)
+                type_ref = self._field_type(name, wire_name, field_schema)
+                imports.type_aliases.update(type_ref.aliases)
+                description = str(field_schema.get("description", "")).strip()
+                attributes.append(
+                    f"        {py_name} ({type_ref.code}): "
+                    f"{description or f'Torn API field `{wire_name}`.'}"
+                )
         lines = [f"class {name}(TornModel):"]
+        lines.extend(
+            self._docstring_lines(name, schema, attributes=attributes)
+        )
+        lines.extend(custom_block("class", name=name, indent="    "))
         if not properties:
             lines.append("    pass")
             return "\n".join(lines) + "\n"
@@ -2144,8 +2238,18 @@ class ResourceMixinRenderer:
             lines.append(")")
         lines.extend(["", ""])
         lines.append(f"class {class_name}:")
-        lines.append(
-            f'    """Typed {tag.name} endpoints generated from Torn OpenAPI."""'
+        lines.extend(
+            [
+                '    """',
+                f"    Typed {tag.name} endpoints generated from Torn OpenAPI.",
+                "",
+                "    Attributes:",
+                "        endpoint (object): Underlying TornAPIWrapper endpoint.",
+                "",
+                "    Args:",
+                "        endpoint (object): Endpoint supplied by the public resource class.",
+                '    """',
+            ]
         )
         if not tag.endpoints:
             lines.append("    pass")
@@ -2154,6 +2258,7 @@ class ResourceMixinRenderer:
         for endpoint in tag.endpoints:
             lines.extend(self._method(endpoint, decorator_name))
             lines.append("")
+        lines.extend(custom_block("class", name=class_name, indent="    "))
         return "\n".join(lines).rstrip() + "\n"
 
     def _method(self, endpoint: EndpointIR, decorator_name: str) -> list[str]:
@@ -2188,22 +2293,44 @@ class ResourceMixinRenderer:
         for part in signature_parts:
             lines.append(f"        {part},")
         lines.append(f"    ) -> {endpoint.response.public_model_name}:")
-        if endpoint.documentation:
-            lines.extend(
-                self._docstring(endpoint.documentation, indent="        ")
+        lines.extend(self._docstring(endpoint))
+        lines.extend(
+            custom_block(
+                "method",
+                name=endpoint.name,
+                indent="        ",
             )
+        )
         lines.append("        raise NotImplementedError")
         return lines
 
     @staticmethod
-    def _docstring(documentation: str, *, indent: str) -> list[str]:
-        """Render OpenAPI text as a safe, conventional Python docstring."""
-        escaped = documentation.replace("\\", "\\\\").replace('"""', '\\"""')
-        body = [
-            f"{indent}{line}" if line else indent
-            for line in escaped.splitlines()
+    def _docstring(endpoint: EndpointIR) -> list[str]:
+        """Render endpoint docs in Google style from the OpenAPI contract."""
+        lines = [
+            '        """',
+            f"        {endpoint.documentation or 'Call this Torn API endpoint.'}",
         ]
-        return [f'{indent}"""', *body, f'{indent}"""']
+        if endpoint.parameters:
+            lines.extend(["", "        Args:"])
+            for parameter in endpoint.parameters:
+                lines.append(
+                    f"            {parameter.python_name} ({parameter.type_ref.code}): "
+                    f"{parameter.location.title()} parameter for this endpoint."
+                )
+        lines.extend(
+            [
+                "",
+                "        Returns:",
+                f"            {endpoint.response.public_model_name}: Parsed API response.",
+                "",
+                "        Raises:",
+                "            TornAPIWrapper.errors.APIError: If Torn rejects the request.",
+                "            pydantic.ValidationError: If the response does not match the model.",
+                '        """',
+            ]
+        )
+        return lines
 
     @staticmethod
     def _parameter(parameter: ParameterIR) -> str:
@@ -2213,7 +2340,7 @@ class ResourceMixinRenderer:
 
 
 class ResourceScaffoldRenderer:
-    """Create-only thin public resources. Existing handwritten files are untouched."""
+    """Render public resources registered with the SDK resource registry."""
 
     def render(self, tag: str, *, async_mode: bool) -> str:
         pascal = PythonNames.pascal(tag)
@@ -2233,17 +2360,44 @@ class ResourceScaffoldRenderer:
             else f"Generated{pascal}ResourceMixin"
         )
         generated_module = f"{tag}_async" if async_mode else tag
-        return (
-            "from __future__ import annotations\n\n"
-            f"from TornAPIWrapper import {wrapper_class}\n"
-            f"from TornAPIWrapper.{endpoint_pkg}.{tag} import {pascal}\n\n"
-            f"from torn_sdk.core.resource import {resource_base}, {registry}\n"
-            f"from torn_sdk.resources._generated.{generated_module} import {generated_mixin}\n\n\n"
-            f"class {resource_class}({generated_mixin}, {resource_base}[{pascal}]):\n"
-            f"    def __init__(self, wrapper: {wrapper_class}) -> None:\n"
-            f"        super().__init__(wrapper.{tag})\n\n\n"
-            f"{registry}.register({tag!r}, {resource_class})\n"
+        lines = generated_module_header(
+            f"Public typed {tag} resource registered with Torn SDK."
         )
+        lines.extend(
+            [
+                f"from TornAPIWrapper import {wrapper_class}",
+                f"from TornAPIWrapper.{endpoint_pkg}.{tag} import {pascal}",
+                "",
+                f"from torn_sdk.core.resource import {resource_base}, {registry}",
+                f"from torn_sdk.resources._generated.{generated_module} import {generated_mixin}",
+                "",
+                "",
+                f"class {resource_class}({generated_mixin}, {resource_base}[{pascal}]):",
+                '    """',
+                f"    Provide typed access to Torn {tag} endpoints.",
+                "",
+                "    Attributes:",
+                f"        endpoint ({pascal}): Underlying TornAPIWrapper {tag} endpoint.",
+                "",
+                "    Args:",
+                f"        wrapper ({wrapper_class}): Configured TornAPIWrapper client.",
+                '    """',
+                "",
+                f"    def __init__(self, wrapper: {wrapper_class}) -> None:",
+                *custom_block(
+                    "method",
+                    name=f"{resource_class}.__init__",
+                    indent="        ",
+                ),
+                f"        super().__init__(wrapper.{tag})",
+                "",
+                *custom_block("class", name=resource_class, indent="    "),
+                "",
+                "",
+                f"{registry}.register({tag!r}, {resource_class})",
+            ]
+        )
+        return "\n".join(lines).rstrip() + "\n"
 
 
 class ResourcePackageRenderer:
@@ -2254,17 +2408,24 @@ class ResourcePackageRenderer:
             "Resource registrations generated from the Torn OpenAPI specification."
         )
 
-        modules = surface.modules
-        if modules:
-            lines.append("from . import (")
-            for module in modules:
-                lines.append(f"    {module},")
-            lines.append(")")
+        exports: list[str] = []
+        for module in surface.modules:
+            async_mode = module.endswith("_async")
+            tag = module.removesuffix("_async")
+            resource_class = (
+                f"Async{PythonNames.pascal(tag)}Resource"
+                if async_mode
+                else f"{PythonNames.pascal(tag)}Resource"
+            )
+            lines.append(f"from .{module} import {resource_class}")
+            exports.append(resource_class)
+        if exports:
             lines.append("")
 
-        # Resource modules are imported only for registration side effects.
-        # The public resource classes are exposed through TornClient/AsyncTornClient.
-        lines.append("__all__ = []")
+        lines.append("__all__ = [")
+        for resource_class in exports:
+            lines.append(f"    {resource_class!r},")
+        lines.append("]")
         return "\n".join(lines).rstrip() + "\n"
 
 
@@ -2290,6 +2451,36 @@ class ClientRenderer:
         pascal = PythonNames.pascal(tag)
         return f"Async{pascal}Resource" if async_mode else f"{pascal}Resource"
 
+    def _client_docstring_lines(self, tags: Sequence[str]) -> list[str]:
+        """Render a consistently indented Google-style client docstring."""
+        mode = "asynchronous" if self.async_mode else "synchronous"
+        wrapper = (
+            "TornAPIWrapperAsync" if self.async_mode else "TornAPIWrapper"
+        )
+        raw = "AsyncRawNamespace" if self.async_mode else "RawNamespace"
+        lines = [
+            '    """',
+            f"    Create a typed {mode} Torn API client.",
+            "",
+            "    Attributes:",
+            f"        raw ({raw}): Escape hatch for raw wrapper access.",
+        ]
+        lines.extend(
+            f"        {tag} (resources.{self._resource_class(tag, async_mode=self.async_mode)}): "
+            f"Typed {tag} API resource."
+            for tag in tags
+        )
+        lines.extend(
+            [
+                "",
+                "    Args:",
+                f"        api_key (str): Torn API key used by {wrapper}.",
+                "        request_timeout (float | tuple[float, float]): Request timeout.",
+                '    """',
+            ]
+        )
+        return lines
+
     def _render_sync(
         self,
         tags: Sequence[str],
@@ -2299,25 +2490,13 @@ class ClientRenderer:
             *generated_module_header(
                 "Synchronous Torn client generated from the Torn OpenAPI specification."
             ),
-            CLIENT_CUSTOM_HEADER_START,
-            *customizations.header,
-            CLIENT_CUSTOM_HEADER_END,
-            "",
             "from TornAPIWrapper import TornAPIWrapper",
             "",
-            "from torn_sdk import resources  # pylint: disable=unused-import",
+            "from torn_sdk import resources",
             "from torn_sdk.base_client import BaseTornClient",
             "from torn_sdk.core.raw import RawNamespace",
             "from torn_sdk.core.resource import ResourceRegistry",
         ]
-
-        if tags:
-            lines.append("")
-            for tag in tags:
-                resource_class = self._resource_class(tag, async_mode=False)
-                lines.append(
-                    f"from torn_sdk.resources.{tag} import {resource_class}"
-                )
 
         lines.extend(
             [
@@ -2326,6 +2505,7 @@ class ClientRenderer:
                 "class TornClient(",
                 "    BaseTornClient[TornAPIWrapper, RawNamespace],",
                 "):",
+                *self._client_docstring_lines(tags),
                 "    raw: RawNamespace",
             ]
         )
@@ -2334,7 +2514,7 @@ class ClientRenderer:
             lines.append("")
             for tag in tags:
                 resource_class = self._resource_class(tag, async_mode=False)
-                lines.append(f"    {tag}: {resource_class}")
+                lines.append(f"    {tag}: resources.{resource_class}")
 
         lines.extend(
             [
@@ -2345,6 +2525,9 @@ class ClientRenderer:
                 "        *,",
                 "        request_timeout: float | tuple[float, float] = 10,",
                 "    ) -> None:",
+                *custom_block(
+                    "method", name="TornClient.__init__", indent="        "
+                ),
                 "        wrapper = TornAPIWrapper(",
                 "            api_key,",
                 "            request_timeout=request_timeout,",
@@ -2361,7 +2544,9 @@ class ClientRenderer:
             lines.append("")
             for tag in tags:
                 resource_class = self._resource_class(tag, async_mode=False)
-                lines.append(f"        self.{tag} = {resource_class}(wrapper)")
+                lines.append(
+                    f"        self.{tag} = resources.{resource_class}(wrapper)"
+                )
 
         lines.extend(
             [
@@ -2389,27 +2574,15 @@ class ClientRenderer:
             *generated_module_header(
                 "Asynchronous Torn client generated from the Torn OpenAPI specification."
             ),
-            CLIENT_CUSTOM_HEADER_START,
-            *customizations.header,
-            CLIENT_CUSTOM_HEADER_END,
-            "",
             "from types import TracebackType",
             "",
             "from TornAPIWrapper import TornAPIWrapperAsync",
             "",
-            "from torn_sdk import resources  # pylint: disable=unused-import",
+            "from torn_sdk import resources",
             "from torn_sdk.base_client import BaseTornClient",
             "from torn_sdk.core.raw import AsyncRawNamespace",
             "from torn_sdk.core.resource import AsyncResourceRegistry",
         ]
-
-        if tags:
-            lines.append("")
-            for tag in tags:
-                resource_class = self._resource_class(tag, async_mode=True)
-                lines.append(
-                    f"from torn_sdk.resources.{tag}_async import {resource_class}"
-                )
 
         lines.extend(
             [
@@ -2418,6 +2591,7 @@ class ClientRenderer:
                 "class AsyncTornClient(",
                 "    BaseTornClient[TornAPIWrapperAsync, AsyncRawNamespace],",
                 "):",
+                *self._client_docstring_lines(tags),
                 "    raw: AsyncRawNamespace",
             ]
         )
@@ -2426,7 +2600,7 @@ class ClientRenderer:
             lines.append("")
             for tag in tags:
                 resource_class = self._resource_class(tag, async_mode=True)
-                lines.append(f"    {tag}: {resource_class}")
+                lines.append(f"    {tag}: resources.{resource_class}")
 
         lines.extend(
             [
@@ -2437,6 +2611,11 @@ class ClientRenderer:
                 "        *,",
                 "        request_timeout: float | tuple[float, float] = 10,",
                 "    ) -> None:",
+                *custom_block(
+                    "method",
+                    name="AsyncTornClient.__init__",
+                    indent="        ",
+                ),
                 "        wrapper = TornAPIWrapperAsync(",
                 "            api_key,",
                 "            request_timeout=request_timeout,",
@@ -2453,7 +2632,9 @@ class ClientRenderer:
             lines.append("")
             for tag in tags:
                 resource_class = self._resource_class(tag, async_mode=True)
-                lines.append(f"        self.{tag} = {resource_class}(wrapper)")
+                lines.append(
+                    f"        self.{tag} = resources.{resource_class}(wrapper)"
+                )
 
         lines.extend(
             [
@@ -2463,6 +2644,10 @@ class ClientRenderer:
                 "        )",
                 "",
                 "    async def close(self) -> None:",
+                '        """Close the underlying asynchronous HTTP resources."""',
+                *custom_block(
+                    "method", name="AsyncTornClient.close", indent="        "
+                ),
                 "        await self._wrapper.close()",
                 "",
                 "    async def __aenter__(self) -> AsyncTornClient:",
@@ -2699,6 +2884,14 @@ class TornSDKGenerator:
         formatter = GeneratedSourceFormatter(self.sdk_root)
 
         def emit(relative: Path, content: str) -> None:
+            if GENERATED_HEADER in content:
+                content = (
+                    content.rstrip()
+                    + "\n\n"
+                    + "\n".join(custom_block("footer"))
+                    + "\n"
+                )
+            content = merge_custom_blocks(self.sdk_root / relative, content)
             files.emit(relative, formatter.format(content))
 
         def scaffold(relative: Path, content: str) -> None:
@@ -2736,11 +2929,11 @@ class TornSDKGenerator:
                 self.async_resources.render(tag),
             )
             if self.scaffold_resources:
-                scaffold(
+                emit(
                     Path("resources") / f"{tag.name}.py",
                     self.scaffolds.render(tag.name, async_mode=False),
                 )
-                scaffold(
+                emit(
                     Path("resources") / f"{tag.name}_async.py",
                     self.scaffolds.render(tag.name, async_mode=True),
                 )

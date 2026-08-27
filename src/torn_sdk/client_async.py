@@ -10,35 +10,46 @@ from types import TracebackType
 
 from TornAPIWrapper import TornAPIWrapperAsync
 
-from torn_sdk import resources  # pylint: disable=unused-import
+from torn_sdk import resources
 from torn_sdk.base_client import BaseTornClient
 from torn_sdk.core.raw import AsyncRawNamespace
 from torn_sdk.core.resource import AsyncResourceRegistry
-from torn_sdk.resources.company_async import AsyncCompanyResource
-from torn_sdk.resources.faction_async import AsyncFactionResource
-from torn_sdk.resources.forum_async import AsyncForumResource
-from torn_sdk.resources.key_async import AsyncKeyResource
-from torn_sdk.resources.market_async import AsyncMarketResource
-from torn_sdk.resources.property_async import AsyncPropertyResource
-from torn_sdk.resources.racing_async import AsyncRacingResource
-from torn_sdk.resources.torn_async import AsyncTornResource
-from torn_sdk.resources.user_async import AsyncUserResource
 
 
 class AsyncTornClient(
     BaseTornClient[TornAPIWrapperAsync, AsyncRawNamespace],
 ):
+    """
+    Create a typed asynchronous Torn API client.
+
+    Attributes:
+        raw (AsyncRawNamespace): Escape hatch for raw wrapper access.
+        company (resources.AsyncCompanyResource): Typed company API resource.
+        faction (resources.AsyncFactionResource): Typed faction API resource.
+        forum (resources.AsyncForumResource): Typed forum API resource.
+        key (resources.AsyncKeyResource): Typed key API resource.
+        market (resources.AsyncMarketResource): Typed market API resource.
+        property (resources.AsyncPropertyResource): Typed property API resource.
+        racing (resources.AsyncRacingResource): Typed racing API resource.
+        torn (resources.AsyncTornResource): Typed torn API resource.
+        user (resources.AsyncUserResource): Typed user API resource.
+
+    Args:
+        api_key (str): Torn API key used by TornAPIWrapperAsync.
+        request_timeout (float | tuple[float, float]): Request timeout.
+    """
+
     raw: AsyncRawNamespace
 
-    company: AsyncCompanyResource
-    faction: AsyncFactionResource
-    forum: AsyncForumResource
-    key: AsyncKeyResource
-    market: AsyncMarketResource
-    property: AsyncPropertyResource
-    racing: AsyncRacingResource
-    torn: AsyncTornResource
-    user: AsyncUserResource
+    company: resources.AsyncCompanyResource
+    faction: resources.AsyncFactionResource
+    forum: resources.AsyncForumResource
+    key: resources.AsyncKeyResource
+    market: resources.AsyncMarketResource
+    property: resources.AsyncPropertyResource
+    racing: resources.AsyncRacingResource
+    torn: resources.AsyncTornResource
+    user: resources.AsyncUserResource
 
     def __init__(
         self,
@@ -46,6 +57,8 @@ class AsyncTornClient(
         *,
         request_timeout: float | tuple[float, float] = 10,
     ) -> None:
+        # <torn-sdk:custom-method AsyncTornClient.__init__>
+        # </torn-sdk:custom-method AsyncTornClient.__init__>
         wrapper = TornAPIWrapperAsync(
             api_key,
             request_timeout=request_timeout,
@@ -56,21 +69,24 @@ class AsyncTornClient(
             raw=AsyncRawNamespace(wrapper),
         )
 
-        self.company = AsyncCompanyResource(wrapper)
-        self.faction = AsyncFactionResource(wrapper)
-        self.forum = AsyncForumResource(wrapper)
-        self.key = AsyncKeyResource(wrapper)
-        self.market = AsyncMarketResource(wrapper)
-        self.property = AsyncPropertyResource(wrapper)
-        self.racing = AsyncRacingResource(wrapper)
-        self.torn = AsyncTornResource(wrapper)
-        self.user = AsyncUserResource(wrapper)
+        self.company = resources.AsyncCompanyResource(wrapper)
+        self.faction = resources.AsyncFactionResource(wrapper)
+        self.forum = resources.AsyncForumResource(wrapper)
+        self.key = resources.AsyncKeyResource(wrapper)
+        self.market = resources.AsyncMarketResource(wrapper)
+        self.property = resources.AsyncPropertyResource(wrapper)
+        self.racing = resources.AsyncRacingResource(wrapper)
+        self.torn = resources.AsyncTornResource(wrapper)
+        self.user = resources.AsyncUserResource(wrapper)
 
         self._load_resources(
             AsyncResourceRegistry.implementations(),
         )
 
     async def close(self) -> None:
+        """Close the underlying asynchronous HTTP resources."""
+        # <torn-sdk:custom-method AsyncTornClient.close>
+        # </torn-sdk:custom-method AsyncTornClient.close>
         await self._wrapper.close()
 
     async def __aenter__(self) -> AsyncTornClient:
@@ -86,3 +102,7 @@ class AsyncTornClient(
 
     # <torn-sdk:custom-class>
     # </torn-sdk:custom-class>
+
+
+# <torn-sdk:custom-footer>
+# </torn-sdk:custom-footer>

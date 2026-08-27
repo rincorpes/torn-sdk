@@ -8,35 +8,46 @@ from __future__ import annotations
 
 from TornAPIWrapper import TornAPIWrapper
 
-from torn_sdk import resources  # pylint: disable=unused-import
+from torn_sdk import resources
 from torn_sdk.base_client import BaseTornClient
 from torn_sdk.core.raw import RawNamespace
 from torn_sdk.core.resource import ResourceRegistry
-from torn_sdk.resources.company import CompanyResource
-from torn_sdk.resources.faction import FactionResource
-from torn_sdk.resources.forum import ForumResource
-from torn_sdk.resources.key import KeyResource
-from torn_sdk.resources.market import MarketResource
-from torn_sdk.resources.property import PropertyResource
-from torn_sdk.resources.racing import RacingResource
-from torn_sdk.resources.torn import TornResource
-from torn_sdk.resources.user import UserResource
 
 
 class TornClient(
     BaseTornClient[TornAPIWrapper, RawNamespace],
 ):
+    """
+    Create a typed synchronous Torn API client.
+
+    Attributes:
+        raw (RawNamespace): Escape hatch for raw wrapper access.
+        company (resources.CompanyResource): Typed company API resource.
+        faction (resources.FactionResource): Typed faction API resource.
+        forum (resources.ForumResource): Typed forum API resource.
+        key (resources.KeyResource): Typed key API resource.
+        market (resources.MarketResource): Typed market API resource.
+        property (resources.PropertyResource): Typed property API resource.
+        racing (resources.RacingResource): Typed racing API resource.
+        torn (resources.TornResource): Typed torn API resource.
+        user (resources.UserResource): Typed user API resource.
+
+    Args:
+        api_key (str): Torn API key used by TornAPIWrapper.
+        request_timeout (float | tuple[float, float]): Request timeout.
+    """
+
     raw: RawNamespace
 
-    company: CompanyResource
-    faction: FactionResource
-    forum: ForumResource
-    key: KeyResource
-    market: MarketResource
-    property: PropertyResource
-    racing: RacingResource
-    torn: TornResource
-    user: UserResource
+    company: resources.CompanyResource
+    faction: resources.FactionResource
+    forum: resources.ForumResource
+    key: resources.KeyResource
+    market: resources.MarketResource
+    property: resources.PropertyResource
+    racing: resources.RacingResource
+    torn: resources.TornResource
+    user: resources.UserResource
 
     def __init__(
         self,
@@ -44,6 +55,8 @@ class TornClient(
         *,
         request_timeout: float | tuple[float, float] = 10,
     ) -> None:
+        # <torn-sdk:custom-method TornClient.__init__>
+        # </torn-sdk:custom-method TornClient.__init__>
         wrapper = TornAPIWrapper(
             api_key,
             request_timeout=request_timeout,
@@ -54,15 +67,15 @@ class TornClient(
             raw=RawNamespace(wrapper),
         )
 
-        self.company = CompanyResource(wrapper)
-        self.faction = FactionResource(wrapper)
-        self.forum = ForumResource(wrapper)
-        self.key = KeyResource(wrapper)
-        self.market = MarketResource(wrapper)
-        self.property = PropertyResource(wrapper)
-        self.racing = RacingResource(wrapper)
-        self.torn = TornResource(wrapper)
-        self.user = UserResource(wrapper)
+        self.company = resources.CompanyResource(wrapper)
+        self.faction = resources.FactionResource(wrapper)
+        self.forum = resources.ForumResource(wrapper)
+        self.key = resources.KeyResource(wrapper)
+        self.market = resources.MarketResource(wrapper)
+        self.property = resources.PropertyResource(wrapper)
+        self.racing = resources.RacingResource(wrapper)
+        self.torn = resources.TornResource(wrapper)
+        self.user = resources.UserResource(wrapper)
 
         self._load_resources(
             ResourceRegistry.implementations(),
@@ -70,3 +83,7 @@ class TornClient(
 
     # <torn-sdk:custom-class>
     # </torn-sdk:custom-class>
+
+
+# <torn-sdk:custom-footer>
+# </torn-sdk:custom-footer>
