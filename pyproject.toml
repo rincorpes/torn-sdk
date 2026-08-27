@@ -85,9 +85,23 @@ addopts = "-v --color=yes"
 [tool.mypy]
 python_version = "3.10"
 files = ["src/torn_sdk"]
-packages = ["torn_sdk"]
 ignore_missing_imports = true
 strict = false
+
+[[tool.mypy.overrides]]
+# Justification: Codegen is in development, resources requires codegen stability
+module = [
+    "torn_sdk.codegen",
+    "torn_sdk.codegen.*",
+    "torn_sdk.resources._generated",
+    "torn_sdk.resources._generated.*",
+]
+disable_error_code = [
+    "arg-type",
+    "return-value",
+    "assignment",
+    "valid-type"
+]
 
 [tool.pylint.messages_control]
 disable = [
