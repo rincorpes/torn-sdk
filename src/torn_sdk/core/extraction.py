@@ -1,3 +1,5 @@
+"""Extract endpoint-specific payloads from raw Torn API responses."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -6,8 +8,23 @@ from .endpoint import EndpointSpec
 
 
 class PayloadExtractor:
+    """Apply an endpoint's extraction contract to a raw response."""
+
     @staticmethod
     def extract(response: Any, spec: EndpointSpec) -> Any:
+        """Extract the payload selected by an endpoint specification.
+
+        Args:
+            response: Raw response returned by TornAPIWrapper.
+            spec: Endpoint extraction contract.
+
+        Returns:
+            The selected payload, or the original response when no extraction applies.
+
+        Raises:
+            KeyError: If a required payload key is absent.
+            TypeError: If keyed extraction is requested from a non-mapping payload.
+        """
         if spec.extractor:
             return spec.extractor(response)
 

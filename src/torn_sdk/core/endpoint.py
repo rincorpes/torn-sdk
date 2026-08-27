@@ -1,3 +1,7 @@
+"""
+Endpoint specification module
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,6 +16,17 @@ Extractor = Callable[[Any], Any]
 
 @dataclass(frozen=True, slots=True)
 class EndpointSpec(Generic[ModelT]):
+    """
+    Endpoint spec class
+
+    Attributes:
+        method (str): method name
+        model (type[ModelT]): Model class
+        extract_key (str | None): The key to extract
+        extract_path (tuple[str, ...] | None): For recursive extraction
+        extractor (Extractor): Custom extraction function
+    """
+
     method: str
     model: type[ModelT]
     extract_key: str | None = None

@@ -1,3 +1,5 @@
+"""Limen commands that generate Torn SDK sources, mocks, and contract tests."""
+
 from __future__ import annotations
 
 import sys
@@ -56,6 +58,8 @@ def _print_changes(
 
 @dataclass(frozen=True)
 class BaseGenerateInput:
+    """Shared parsed options for every Torn SDK generation command."""
+
     openapi: Path
     tags: set[str] | None
     strict: bool
@@ -83,6 +87,8 @@ class BaseGenerateInput:
 
 @dataclass(frozen=True)
 class GenerateSDKInput(BaseGenerateInput):
+    """Parsed options for typed SDK source generation."""
+
     sdk_root: Path
     dry_run: bool
     prune: bool
@@ -90,6 +96,7 @@ class GenerateSDKInput(BaseGenerateInput):
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, Any]) -> "GenerateSDKInput":
+        """Create typed SDK-generation input from Limen command values."""
         return cls(
             **cls._base_values(values),
             sdk_root=Path(str(values.get("sdk_root") or "src/torn_sdk")),
@@ -101,10 +108,13 @@ class GenerateSDKInput(BaseGenerateInput):
 
 @dataclass(frozen=True)
 class GenerateMockInput(BaseGenerateInput):
+    """Parsed options for network-free TornAPIWrapper mock generation."""
+
     output: Path
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, Any]) -> "GenerateMockInput":
+        """Create mock-generation input from Limen command values."""
         return cls(
             **cls._base_values(values),
             output=Path(
@@ -118,6 +128,8 @@ class GenerateMockInput(BaseGenerateInput):
 
 @dataclass(frozen=True)
 class GenerateTestsInput(BaseGenerateInput):
+    """Parsed options for generated pytest contract tests."""
+
     sdk_root: Path
     test_root: Path
     mock_module: str
@@ -126,6 +138,7 @@ class GenerateTestsInput(BaseGenerateInput):
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, Any]) -> "GenerateTestsInput":
+        """Create test-generation input from Limen command values."""
         return cls(
             **cls._base_values(values),
             sdk_root=Path(str(values.get("sdk_root") or "src/torn_sdk")),
@@ -140,7 +153,10 @@ class GenerateTestsInput(BaseGenerateInput):
 
 
 class GenerateSDKOperation:
+    """Generate typed SDK models, resources, clients, and reports."""
+
     def execute(self, input_data: GenerateSDKInput) -> int:
+        """Run SDK generation and return a CLI-compatible exit status."""
         document = OpenAPIDocument.load(input_data.openapi)
         generator = TornSDKGenerator(
             document,
@@ -204,7 +220,10 @@ class GenerateSDKOperation:
 
 
 class GenerateMockOperation:
+    """Generate the OpenAPI-backed TornAPIWrapper test double."""
+
     def execute(self, input_data: GenerateMockInput) -> int:
+        """Run mock generation and return a CLI-compatible exit status."""
         try:
             document = OpenAPIDocument.load(input_data.openapi)
             generator = TornMockGenerator(
@@ -228,7 +247,10 @@ class GenerateMockOperation:
 
 
 class GenerateTestsOperation:
+    """Generate pytest contracts for the current typed SDK surface."""
+
     def execute(self, input_data: GenerateTestsInput) -> int:
+        """Run test generation and return a CLI-compatible exit status."""
         try:
             document = OpenAPIDocument.load(input_data.openapi)
             generator = TornTestGenerator(
@@ -330,17 +352,23 @@ COMMON_ARGS = [
 
 @CommandRegistry.implementation("generate")
 class GenerateCommand(BaseCommand):
+    """Parent command for all Torn SDK generation workflows."""
+
     is_group = True
     summary = "Generate SDK artifacts, mocks, or tests."
 
 
 class BaseGenerateCommand(BaseCommand):
+    """Abstract base configuration for generation subcommands."""
+
     abstract = True
     parent = "generate"
 
 
 @CommandRegistry.implementation("generate_sdk")
 class GenerateSDKCommand(BaseGenerateCommand):
+    """Expose the typed SDK generator as ``torn-sdk generate sdk``."""
+
     abstract = False
     name = "sdk"
     summary = "Generate typed SDK models, resources, clients, and exports."
@@ -374,6 +402,8 @@ class GenerateSDKCommand(BaseGenerateCommand):
 
 @CommandRegistry.implementation("generate_mock")
 class GenerateMockCommand(BaseGenerateCommand):
+    """Expose mock generation as ``torn-sdk generate mock``."""
+
     abstract = False
     name = "mock"
     summary = "Generate the OpenAPI-backed TornAPIWrapper mock client."
@@ -392,6 +422,8 @@ class GenerateMockCommand(BaseGenerateCommand):
 
 @CommandRegistry.implementation("generate_tests")
 class GenerateTestsCommand(BaseGenerateCommand):
+    """Expose test generation as ``torn-sdk generate tests``."""
+
     abstract = False
     name = "tests"
     summary = "Generate pytest contract tests against the generated mock."

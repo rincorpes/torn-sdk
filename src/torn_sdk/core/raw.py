@@ -1,3 +1,5 @@
+"""Typed escape hatches for TornAPIWrapper's raw endpoint resources."""
+
 from __future__ import annotations
 
 from builtins import property as builtin_property
@@ -47,32 +49,43 @@ class NamespaceWrapper(
         TornT,
     ],
 ):
-    @builtin_property
-    def user(self) -> UserT: ...
+    """Protocol shared by synchronous and asynchronous wrapper namespaces."""
 
     @builtin_property
-    def faction(self) -> FactionT: ...
+    def user(self) -> UserT:
+        """Return the raw user endpoint namespace."""
 
     @builtin_property
-    def company(self) -> CompanyT: ...
+    def faction(self) -> FactionT:
+        """Return the raw faction endpoint namespace."""
 
     @builtin_property
-    def market(self) -> MarketT: ...
+    def company(self) -> CompanyT:
+        """Return the raw company endpoint namespace."""
 
     @builtin_property
-    def racing(self) -> RacingT: ...
+    def market(self) -> MarketT:
+        """Return the raw market endpoint namespace."""
 
     @builtin_property
-    def forum(self) -> ForumT: ...
+    def racing(self) -> RacingT:
+        """Return the raw racing endpoint namespace."""
 
     @builtin_property
-    def property(self) -> PropertyT: ...
+    def forum(self) -> ForumT:
+        """Return the raw forum endpoint namespace."""
 
     @builtin_property
-    def key(self) -> KeyT: ...
+    def property(self) -> PropertyT:
+        """Return the raw property endpoint namespace."""
 
     @builtin_property
-    def torn(self) -> TornT: ...
+    def key(self) -> KeyT:
+        """Return the raw key endpoint namespace."""
+
+    @builtin_property
+    def torn(self) -> TornT:
+        """Return the raw Torn metadata endpoint namespace."""
 
 
 class BaseNamespace(
@@ -88,6 +101,8 @@ class BaseNamespace(
         TornT,
     ],
 ):
+    """Expose typed endpoint namespaces from a TornAPIWrapper instance."""
+
     def __init__(
         self,
         wrapper: NamespaceWrapper[
@@ -102,42 +117,52 @@ class BaseNamespace(
             TornT,
         ],
     ) -> None:
+        """Store the wrapper namespace that provides raw endpoint resources."""
         self._wrapper = wrapper
 
     @builtin_property
     def user(self) -> UserT:
+        """Return the raw user endpoint namespace."""
         return self._wrapper.user
 
     @builtin_property
     def faction(self) -> FactionT:
+        """Return the raw faction endpoint namespace."""
         return self._wrapper.faction
 
     @builtin_property
     def company(self) -> CompanyT:
+        """Return the raw company endpoint namespace."""
         return self._wrapper.company
 
     @builtin_property
     def market(self) -> MarketT:
+        """Return the raw market endpoint namespace."""
         return self._wrapper.market
 
     @builtin_property
     def racing(self) -> RacingT:
+        """Return the raw racing endpoint namespace."""
         return self._wrapper.racing
 
     @builtin_property
     def forum(self) -> ForumT:
+        """Return the raw forum endpoint namespace."""
         return self._wrapper.forum
 
     @builtin_property
     def property(self) -> PropertyT:
+        """Return the raw property endpoint namespace."""
         return self._wrapper.property
 
     @builtin_property
     def key(self) -> KeyT:
+        """Return the raw key endpoint namespace."""
         return self._wrapper.key
 
     @builtin_property
     def torn(self) -> TornT:
+        """Return the raw Torn metadata endpoint namespace."""
         return self._wrapper.torn
 
 

@@ -42,7 +42,7 @@ class EndpointResource(Protocol):
         """
         Executes the method from the API transport
 
-        Attrs:
+        Args:
             method (str): Name of the method to execute
             *args: List of positional arguments for the method
             **kwargs: Keyword arguments for the method
@@ -104,7 +104,7 @@ def endpoint(
     """
     Synchronous endpoint decorator
 
-    Attrs:
+    Args:
         method (str | None): Class method name
         extract (str | None): key to extract from raw result
         extract_path (tuple[str, ...]): For recursive extraction
@@ -164,7 +164,7 @@ def async_endpoint(
     """
     Asynchronous endpoint decorator
 
-    Attrs:
+    Args:
         method (str | None): Class method name
         extract (str | None): key to extract from raw result
         extract_path (tuple[str, ...]): For recursive extraction

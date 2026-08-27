@@ -1,3 +1,5 @@
+"""Generate deterministic pytest contracts for the typed Torn SDK surface."""
+
 from __future__ import annotations
 
 import re

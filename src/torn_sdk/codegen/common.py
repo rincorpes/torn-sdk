@@ -1,3 +1,5 @@
+"""Shared OpenAPI, naming, file-output, and reporting utilities for generators."""
+
 from __future__ import annotations
 
 import hashlib
