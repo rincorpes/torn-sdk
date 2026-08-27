@@ -7,7 +7,7 @@ import json
 import keyword
 import re
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -319,6 +319,32 @@ class RefResolver:
         return None
 
 
+@dataclass(frozen=True, slots=True)
+class BuildContext:
+    """Track recursive schema-example generation state."""
+
+    name_hint: str
+    depth: int = 0
+    ref_stack: tuple[str, ...] = ()
+
+    def child(
+        self,
+        *,
+        name_hint: str | None = None,
+        ref: str | None = None,
+    ) -> "BuildContext":
+        """Create a context for a nested schema."""
+
+        return replace(
+            self,
+            name_hint=name_hint or self.name_hint,
+            depth=self.depth + 1,
+            ref_stack=(
+                (*self.ref_stack, ref) if ref is not None else self.ref_stack
+            ),
+        )
+
+
 class SchemaExampleFactory:
     """Build deterministic JSON-compatible examples from OpenAPI schemas."""
 
@@ -340,44 +366,65 @@ class SchemaExampleFactory:
         depth: int = 0,
         ref_stack: tuple[str, ...] = (),
     ) -> Any:
-        """Build a deterministic example value for an OpenAPI schema node.
+        """Build a deterministic example value for an OpenAPI schema node."""
 
-        Args:
-            schema: Schema or reference node to sample.
-            name_hint: Contextual name used for generated scalar values.
-            depth: Current recursive traversal depth.
-            ref_stack: References currently being resolved.
+        context = BuildContext(
+            name_hint=name_hint,
+            depth=depth,
+            ref_stack=ref_stack,
+        )
+        return self._build(schema, context)
 
-        Returns:
-            A JSON-compatible example value.
-        """
-        if depth > self.max_depth:
+    def _build(self, schema: Any, context: BuildContext) -> Any:
+        if context.depth > self.max_depth:
             self.warnings.append(
-                f"maximum schema depth exceeded at {name_hint}; using null"
+                f"maximum schema depth exceeded at {context.name_hint}; "
+                "using null"
             )
             return None
 
         if not isinstance(schema, Mapping):
             return None
 
-        if "$ref" in schema:
-            ref = str(schema["$ref"])
-            ref_name = ref.rsplit("/", 1)[-1]
-            if ref in ref_stack:
-                resolved = self.refs.resolve(schema)
-                if self._nullable(resolved):
-                    return None
-                self.warnings.append(
-                    f"recursive schema {ref_name} at {name_hint}; using empty object"
-                )
-                return {}
-            return self.build(
-                self.refs.resolve(schema),
-                name_hint=ref_name,
-                depth=depth + 1,
-                ref_stack=(*ref_stack, ref),
+        reference_value = self._build_reference(schema, context)
+        if reference_value is not MISSING:
+            return reference_value
+
+        explicit_value = self._explicit_value(schema)
+        if explicit_value is not MISSING:
+            return explicit_value
+
+        return self._build_by_shape(schema, context)
+
+    def _build_reference(
+        self,
+        schema: Mapping[str, Any],
+        context: BuildContext,
+    ) -> Any:
+        if "$ref" not in schema:
+            return MISSING
+
+        ref = str(schema["$ref"])
+        ref_name = ref.rsplit("/", 1)[-1]
+        resolved = self.refs.resolve(schema)
+
+        if ref not in context.ref_stack:
+            return self._build(
+                resolved,
+                context.child(name_hint=ref_name, ref=ref),
             )
 
+        if self._nullable(resolved):
+            return None
+
+        self.warnings.append(
+            f"recursive schema {ref_name} at {context.name_hint}; "
+            "using empty object"
+        )
+        return {}
+
+    @staticmethod
+    def _explicit_value(schema: Mapping[str, Any]) -> Any:
         if "example" in schema:
             return schema["example"]
 
@@ -388,139 +435,143 @@ class SchemaExampleFactory:
         if "const" in schema:
             return schema["const"]
 
-        if "default" in schema and schema["default"] is not None:
+        if schema.get("default") is not None:
             return schema["default"]
 
         enum = schema.get("enum")
         if isinstance(enum, list) and enum:
-            non_null = [value for value in enum if value is not None]
-            return non_null[0] if non_null else None
+            return next((value for value in enum if value is not None), None)
+
+        return MISSING
+
+    def _build_by_shape(
+        self,
+        schema: Mapping[str, Any],
+        context: BuildContext,
+    ) -> Any:
+        result: Any
 
         if "allOf" in schema:
-            return self._all_of(schema["allOf"], name_hint, depth, ref_stack)
+            result = self._all_of(schema["allOf"], context)
+        elif "oneOf" in schema:
+            result = self._first_branch(schema["oneOf"], context)
+        elif "anyOf" in schema:
+            result = self._first_branch(schema["anyOf"], context)
+        else:
+            schema_type = self._single_schema_type(schema)
 
-        if "oneOf" in schema:
-            return self._first_branch(
-                schema["oneOf"], name_hint, depth, ref_stack
-            )
+            if schema_type == "object" or "properties" in schema:
+                result = self._object(schema, context)
+            elif schema_type == "array":
+                result = self._array(schema, context)
+            else:
+                scalar_builders = {
+                    "integer": lambda: self._integer(schema),
+                    "number": lambda: float(self._integer(schema)),
+                    "boolean": lambda: True,
+                    "string": lambda: self._string(
+                        schema,
+                        context.name_hint,
+                    ),
+                }
+                builder = scalar_builders.get(schema_type)
 
-        if "anyOf" in schema:
-            return self._first_branch(
-                schema["anyOf"], name_hint, depth, ref_stack
-            )
+                if builder is not None:
+                    result = builder()
+                else:
+                    self.warnings.append(
+                        f"unsupported schema type {schema_type!r} at "
+                        f"{context.name_hint}; using null"
+                    )
+                    result = None
 
+        return result
+
+    def _single_schema_type(self, schema: Mapping[str, Any]) -> str | None:
         schema_type = schema.get("type")
-        if isinstance(schema_type, list):
-            non_null = [item for item in schema_type if item != "null"]
-            if not non_null:
-                return None
-            clone = dict(schema)
-            clone["type"] = non_null[0]
-            return self.build(
-                clone,
-                name_hint=name_hint,
-                depth=depth + 1,
-                ref_stack=ref_stack,
+
+        if isinstance(schema_type, str):
+            return schema_type
+
+        if not isinstance(schema_type, list):
+            return "string" if "format" in schema else None
+
+        non_null = [item for item in schema_type if item != "null"]
+        return str(non_null[0]) if non_null else None
+
+    def _array(
+        self,
+        schema: Mapping[str, Any],
+        context: BuildContext,
+    ) -> list[Any]:
+        try:
+            count = max(1, int(schema.get("minItems", 0) or 0))
+        except (TypeError, ValueError):
+            count = 1
+
+        return [
+            self._build(
+                schema.get("items", {}),
+                context.child(name_hint=f"{context.name_hint}_item"),
             )
-
-        if schema_type == "null":
-            return None
-
-        if schema_type == "object" or "properties" in schema:
-            return self._object(schema, name_hint, depth, ref_stack)
-
-        if schema_type == "array":
-            try:
-                count = max(1, int(schema.get("minItems", 0) or 0))
-            except (TypeError, ValueError):
-                count = 1
-            count = min(count, 3)
-            return [
-                self.build(
-                    schema.get("items", {}),
-                    name_hint=f"{name_hint}_item",
-                    depth=depth + 1,
-                    ref_stack=ref_stack,
-                )
-                for _ in range(count)
-            ]
-
-        if schema_type == "integer":
-            return self._integer(schema)
-        if schema_type == "number":
-            return float(self._integer(schema))
-        if schema_type == "boolean":
-            return True
-        if schema_type in {"string", None}:
-            return self._string(schema, name_hint)
-
-        self.warnings.append(
-            f"unsupported schema type {schema_type!r} at {name_hint}; using null"
-        )
-        return None
+            for _ in range(min(count, 3))
+        ]
 
     def _object(
         self,
         schema: Mapping[str, Any],
-        name_hint: str,
-        depth: int,
-        ref_stack: tuple[str, ...],
+        context: BuildContext,
     ) -> dict[str, Any]:
-        result: dict[str, Any] = {}
         properties = schema.get("properties", {})
         if isinstance(properties, Mapping):
-            for name, child in properties.items():
-                result[str(name)] = self.build(
+            result = {
+                str(name): self._build(
                     child,
-                    name_hint=f"{name_hint}_{name}",
-                    depth=depth + 1,
-                    ref_stack=ref_stack,
+                    context.child(
+                        name_hint=f"{context.name_hint}_{name}",
+                    ),
                 )
+                for name, child in properties.items()
+            }
+            if result:
+                return result
 
         additional = schema.get("additionalProperties")
-        if not result and isinstance(additional, Mapping):
-            result["key"] = self.build(
-                additional,
-                name_hint=f"{name_hint}_value",
-                depth=depth + 1,
-                ref_stack=ref_stack,
-            )
-        return result
+        if isinstance(additional, Mapping):
+            return {
+                "key": self._build(
+                    additional,
+                    context.child(name_hint=f"{context.name_hint}_value"),
+                )
+            }
+
+        return {}
 
     def _all_of(
         self,
         branches: Any,
-        name_hint: str,
-        depth: int,
-        ref_stack: tuple[str, ...],
+        context: BuildContext,
     ) -> Any:
         if not isinstance(branches, list):
             return None
-        values = [
-            self.build(
-                branch,
-                name_hint=name_hint,
-                depth=depth + 1,
-                ref_stack=ref_stack,
-            )
-            for branch in branches
-        ]
+
+        values = [self._build(branch, context.child()) for branch in branches]
         if all(isinstance(value, dict) for value in values):
             merged: dict[str, Any] = {}
             for value in values:
                 merged.update(value)
             return merged
+
         return next((value for value in values if value is not None), None)
 
     def _first_branch(
         self,
         branches: Any,
-        name_hint: str,
-        depth: int,
-        ref_stack: tuple[str, ...],
+        context: BuildContext,
     ) -> Any:
         if not isinstance(branches, list):
             return None
+
         for branch in branches:
             resolved = self.refs.resolve(branch)
             if (
@@ -528,12 +579,8 @@ class SchemaExampleFactory:
                 and resolved.get("type") == "null"
             ):
                 continue
-            return self.build(
-                branch,
-                name_hint=name_hint,
-                depth=depth + 1,
-                ref_stack=ref_stack,
-            )
+            return self._build(branch, context.child())
+
         return None
 
     @staticmethod

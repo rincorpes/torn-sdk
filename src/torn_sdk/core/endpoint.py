@@ -9,9 +9,13 @@ from typing import Any, Callable, Generic, TypeVar
 
 from pydantic import BaseModel
 
+# Justification: Types should be PascalCase
+# pylint: disable=invalid-name
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
 Extractor = Callable[[Any], Any]
+
+# pylint: enable=invalid-name
 
 
 @dataclass(frozen=True, slots=True)

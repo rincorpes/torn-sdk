@@ -25,6 +25,10 @@ from TornAPIWrapper.endpoints_async.racing import Racing as AsyncRacing
 from TornAPIWrapper.endpoints_async.torn import Torn as AsyncTorn
 from TornAPIWrapper.endpoints_async.user import User as AsyncUser
 
+# Justification: Types should be PascalCase
+# pylint: disable=invalid-name
+# Justification: We will rename these once the package is fully stable
+# pylint: disable=typevar-name-incorrect-variance
 UserT = TypeVar("UserT", covariant=True)
 FactionT = TypeVar("FactionT", covariant=True)
 CompanyT = TypeVar("CompanyT", covariant=True)
@@ -34,6 +38,8 @@ ForumT = TypeVar("ForumT", covariant=True)
 PropertyT = TypeVar("PropertyT", covariant=True)
 KeyT = TypeVar("KeyT", covariant=True)
 TornT = TypeVar("TornT", covariant=True)
+
+# pylint: enable=invalid-name,typevar-name-incorrect-variance
 
 
 class NamespaceWrapper(

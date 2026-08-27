@@ -9,7 +9,11 @@ from pydantic import BaseModel
 from .endpoint import EndpointSpec
 from .extraction import PayloadExtractor
 
+# Justification: Types should be PascalCase
+# pylint: disable=invalid-name
 ModelT = TypeVar("ModelT", bound=BaseModel)
+
+# pylint: enable=invalid-name
 
 
 class ResponseParser:

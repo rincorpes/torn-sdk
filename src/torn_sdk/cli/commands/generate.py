@@ -17,7 +17,10 @@ from torn_sdk.codegen.common import (
     PythonNames,
     ReviewRequired,
 )
-from torn_sdk.codegen.mock import TornMockGenerator
+from torn_sdk.codegen.mock import (
+    TornMockGenerator,
+    TornMockGeneratorRunContext,
+)
 from torn_sdk.codegen.sdk import TornSDKGenerator
 from torn_sdk.codegen.tests import TornTestGenerator
 
@@ -232,11 +235,13 @@ class GenerateMockOperation:
                 strict=input_data.strict,
             )
             return generator.run(
-                output=input_data.output,
-                selected_tags=input_data.tags,
-                report=input_data.report,
-                report_file=input_data.report_file,
-                check=input_data.check,
+                context=TornMockGeneratorRunContext(
+                    output=input_data.output,
+                    selected_tags=input_data.tags,
+                    report=input_data.report,
+                    report_file=input_data.report_file,
+                    check=input_data.check,
+                )
             )
         except ReviewRequired as exc:
             print(f"REVIEW REQUIRED: {exc}", file=sys.stderr)

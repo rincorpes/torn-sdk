@@ -27,6 +27,7 @@ dev = [
     "isort~=5.13",
     "mypy~=1.5",
     "pylint~=3.3",
+    "pylint-per-file-ignores"
 ]
 docs = [
     "furo~=2024.8",
@@ -100,8 +101,13 @@ disable = [
     # Justification: TODOs are acceptable during development.
     "fixme",
 ]
+per-file-ignores = [
+    # Justification: Codegen module is still in development
+    "src/torn_sdk/codegen/*.py:too-many-arguments,pointless-string-statement,too-many-instance-attributes,too-many-branches,too-many-return-statements,protected-access,too-many-statements,too-many-locals,unused-argument,too-many-positional-arguments,too-many-lines,import-outside-toplevel,redefined-outer-name,unsupported-membership-test,duplicate-code",
+]
 
 [tool.pylint.MAIN]
+load-plugins = ["pylint_per_file_ignores"]
 ignore-paths = [
     "^\\.venv",
     "^venv",

@@ -28,19 +28,14 @@ raw namespaces, overrides/custom extractors) remains outside generator ownership
 
 from __future__ import annotations
 
-import argparse
-import hashlib
 import importlib
 import inspect
 import json
-import keyword
 import re
-import sys
-import urllib.request
 from collections import defaultdict, deque
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Iterable, Literal, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 from torn_sdk.codegen.common import (
     MISSING,
@@ -3108,8 +3103,6 @@ class ClientRenderer:
 
 
 class ResourceSurfacePlanner:
-    """Determine public resource modules and client resource attributes."""
-
     """Determine which public resource modules are safe to import into package/client surfaces."""
 
     def __init__(self, sdk_root: Path) -> None:
@@ -3371,9 +3364,6 @@ class TornSDKGenerator:
                 )
             content = merge_custom_blocks(self.sdk_root / relative, content)
             files.emit(relative, formatter.format(content))
-
-        def scaffold(relative: Path, content: str) -> None:
-            files.scaffold(relative, formatter.format(content))
 
         # Render selected models for emission. Global model discovery above has
         # already populated the shared Literal registry from every supported tag.
