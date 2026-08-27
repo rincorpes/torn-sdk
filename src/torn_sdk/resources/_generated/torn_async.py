@@ -25,7 +25,6 @@ from torn_sdk.models.torn import (
     TornHofResponse,
     TornHonorsResponse,
     TornItemAmmoResponse,
-    TornItemDetailsResponse,
     TornItemModsResponse,
     TornItemsResponse,
     TornLogCategoriesResponse,
@@ -560,35 +559,6 @@ class GeneratedAsyncTornResourceMixin:
         """
         # <torn-sdk:custom-method itemammo>
         # </torn-sdk:custom-method itemammo>
-        raise NotImplementedError
-
-    @async_endpoint(extract="itemdetails")
-    async def itemdetails(
-        self,
-        item_id: list[int],
-        *,
-        timestamp: int | str | None = None,
-        comment: str | None = None,
-    ) -> TornItemDetailsResponse:
-        """
-                Get details for specific item(s)
-
-        Requires public key.
-
-                Args:
-                    item_id (list[int]): Path parameter for this endpoint.
-                    timestamp (int | str | None): Query parameter for this endpoint.
-                    comment (str | None): Query parameter for this endpoint.
-
-                Returns:
-                    TornItemDetailsResponse: Parsed API response.
-
-                Raises:
-                    TornAPIWrapper.errors.APIError: If Torn rejects the request.
-                    pydantic.ValidationError: If the response does not match the model.
-        """
-        # <torn-sdk:custom-method itemdetails>
-        # </torn-sdk:custom-method itemdetails>
         raise NotImplementedError
 
     @async_endpoint(extract="itemmods")

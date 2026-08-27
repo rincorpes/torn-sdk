@@ -23,7 +23,6 @@ from .gyms import TornGymsResponse
 from .hof import TornHofResponse
 from .honors import TornHonorsResponse
 from .itemammo import TornItemAmmoResponse
-from .itemdetails import TornItemDetailsResponse
 from .itemmods import TornItemModsResponse
 from .items import TornItemsResponse
 from .logcategories import TornLogCategoriesResponse
@@ -60,7 +59,6 @@ __all__ = [
     "TornHofResponse",
     "TornHonorsResponse",
     "TornItemAmmoResponse",
-    "TornItemDetailsResponse",
     "TornItemModsResponse",
     "TornItemsResponse",
     "TornLogCategoriesResponse",

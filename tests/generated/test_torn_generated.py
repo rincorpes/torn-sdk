@@ -25,7 +25,6 @@ from torn_sdk.models.torn import (
     TornHofResponse,
     TornHonorsResponse,
     TornItemAmmoResponse,
-    TornItemDetailsResponse,
     TornItemModsResponse,
     TornItemsResponse,
     TornLogCategoriesResponse,
@@ -212,15 +211,6 @@ CASES = [
         (),
         (),
         id='itemammo-torn-itemammo',
-    ),
-    pytest.param(
-        'itemdetails',
-        {'item_id': [1]},
-        TornItemDetailsResponse,
-        '/torn/itemdetails',
-        ('id',),
-        (),
-        id='itemdetails-torn-ids-itemdetails',
     ),
     pytest.param(
         'itemmods',

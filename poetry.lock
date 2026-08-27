@@ -1942,6 +1942,22 @@ spelling = ["pyenchant (>=3.2,<4.0)"]
 testutils = ["gitpython (>3)"]
 
 [[package]]
+name = "pylint-per-file-ignores"
+version = "3.2.1"
+description = "A pylint plugin to ignore error codes per file."
+optional = true
+python-versions = "<4,>=3.10"
+groups = ["main"]
+markers = "extra == \"dev\""
+files = [
+    {file = "pylint_per_file_ignores-3.2.1-py3-none-any.whl", hash = "sha256:aaac8b118791e742ccf7baaf42346978f6cd0440a9090d4087fc8ff26e4a31f2"},
+    {file = "pylint_per_file_ignores-3.2.1.tar.gz", hash = "sha256:0a89f3cdc6fa09244a3f5624ad977ac9b026f0b25b2adb48c97c080da8d858f9"},
+]
+
+[package.dependencies]
+pylint = ">=3.3,<5"
+
+[[package]]
 name = "pytest"
 version = "9.0.3"
 description = "pytest: simple powerful testing with Python"
@@ -2412,14 +2428,14 @@ files = [
 
 [[package]]
 name = "tornapiwrapper"
-version = "2.16.0"
+version = "2.17.0"
 description = "A Python wrapper for the Torn City API, providing access to Torn City data."
 optional = false
 python-versions = ">=3.13"
 groups = ["main"]
 files = [
-    {file = "tornapiwrapper-2.16.0-py3-none-any.whl", hash = "sha256:d357b0cf4e855e48516b7ee4c6af695d2eafc670d771e19ab4f39d1179cf9370"},
-    {file = "tornapiwrapper-2.16.0.tar.gz", hash = "sha256:84be1f3d8fbe11ddce7832144821ef0d20e5f12de92a1583f64770e8ce3dab50"},
+    {file = "tornapiwrapper-2.17.0-py3-none-any.whl", hash = "sha256:d895ff3085fca62dc490076fe5dcbd21ba030bbc321a3ed7cf2ef540abe865a6"},
+    {file = "tornapiwrapper-2.17.0.tar.gz", hash = "sha256:779d09526798de86a5bf18c96c26751c34598ebf8cebcc754577890cb9e3521e"},
 ]
 
 [package.dependencies]
@@ -2591,10 +2607,10 @@ multidict = ">=4.0"
 propcache = ">=0.2.1"
 
 [extras]
-dev = ["black", "isort", "mypy", "pylint", "pytest", "pytest-cov"]
+dev = ["black", "isort", "mypy", "pylint", "pylint-per-file-ignores", "pytest", "pytest-cov"]
 docs = ["furo", "myst-parser", "sphinx", "sphinx-copybutton", "sphinx-design", "tomli"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<4.0"
-content-hash = "c2382fb748a8dd5ab2148ae6b7a9ac327f1d7c83c1b98d27558f4886786ec50b"
+content-hash = "195db7b52ce8315a98f26ff100ecea41ac9931c2027ea1c044223133b37a4db0"

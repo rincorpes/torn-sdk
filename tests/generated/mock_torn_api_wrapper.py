@@ -877,13 +877,6 @@ _ROUTES: dict[str, tuple[_RouteVariant, ...]] = {
             response={'itemammo': [{'id': 1, 'name': 'Mock', 'price': 1, 'types': ['Standard']}]},
         ),
     ),
-    '/torn/itemdetails': (
-        _RouteVariant(
-            required=('id',),
-            forbidden=(),
-            response={'itemdetails': [{'uid': 1, 'stats': {'damage': 1.0, 'accuracy': 1.0, 'armor': 1.0, 'quality': 1.0}, 'bonuses': [{'id': 1, 'title': 'x', 'description': 'Mock value', 'value': 1}], 'rarity': 'yellow', 'id': 1, 'name': 'Mock', 'type': 'Alcohol', 'sub_type': 'Heavy artillery'}]},
-        ),
-    ),
     '/torn/itemmods': (
         _RouteVariant(
             required=(),
