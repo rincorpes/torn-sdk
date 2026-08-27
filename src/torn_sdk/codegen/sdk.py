@@ -68,7 +68,16 @@ CLIENT_CUSTOM_CLASS_END = "# </torn-sdk:custom-class>"
 def custom_block(
     kind: str, *, name: str | None = None, indent: str = ""
 ) -> list[str]:
-    """Render a user-owned region whose contents survive regeneration."""
+    """Render a user-owned region whose contents survive regeneration.
+
+    Args:
+        kind: Custom block category.
+        name: Optional block name.
+        indent: Prefix applied to each marker.
+
+    Returns:
+        Opening and closing marker lines.
+    """
     suffix = f" {name}" if name else ""
     return [
         f"{indent}# <torn-sdk:custom-{kind}{suffix}>",
@@ -77,7 +86,14 @@ def custom_block(
 
 
 def generated_module_header(description: str) -> list[str]:
-    """Create a standard header with a Python-recognized module docstring."""
+    """Create a standard header with a Python-recognized module docstring.
+
+    Args:
+        description: Generated module description.
+
+    Returns:
+        Standard generated-module header lines.
+    """
     return [
         f'"""{description}"""',
         *custom_block("header"),
@@ -116,7 +132,14 @@ class GeneratedSourceFormatter:
         )
 
     def format(self, source: str) -> str:
-        """Format generated source without writing outside the generator root."""
+        """Format generated source without writing outside the generator root.
+
+        Args:
+            source: Complete generated Python source.
+
+        Returns:
+            Black- and isort-formatted Python source.
+        """
         source, custom_header = self._extract_custom_header(source)
         # Supplying a generated file path makes isort reapply skip_glob rules.
         # The explicit config retains project import settings without skipping.
@@ -147,7 +170,15 @@ class GeneratedSourceFormatter:
 
 
 def merge_custom_blocks(path: Path, source: str) -> str:
-    """Carry user-owned marked regions from an existing generated file forward."""
+    """Carry user-owned marked regions from an existing generated file forward.
+
+    Args:
+        path: Existing generated file path.
+        source: Newly rendered generated source.
+
+    Returns:
+        Source with matching custom blocks preserved.
+    """
     if not path.exists():
         return source
     existing = path.read_text(encoding="utf-8")
@@ -171,14 +202,26 @@ def merge_custom_blocks(path: Path, source: str) -> str:
 
 @dataclass(frozen=True)
 class ClientCustomizations:
-    """User-owned source kept when the generated client surface changes."""
+    """User-owned source kept when the generated client surface changes.
+
+    Attributes:
+        header: Preserved module-level custom lines.
+        class_body: Preserved custom lines within the client class body.
+    """
 
     header: tuple[str, ...] = ()
     class_body: tuple[str, ...] = ()
 
 
 def read_client_customizations(path: Path) -> ClientCustomizations:
-    """Read preserved client regions, migrating standalone directives once."""
+    """Read preserved client regions, migrating standalone directives once.
+
+    Args:
+        path: Generated client module path.
+
+    Returns:
+        Custom header and class-body content found in the module.
+    """
     if not path.exists():
         return ClientCustomizations()
 
@@ -220,6 +263,15 @@ def read_client_customizations(path: Path) -> ClientCustomizations:
 
 @dataclass(frozen=True)
 class ParameterOverride:
+    """Describe a Torn-specific override for a generated parameter.
+
+    Attributes:
+        python_type: Replacement annotation, if any.
+        default: Replacement default value, if any.
+        python_name: Replacement Python parameter name, if any.
+        omit: Whether to omit the parameter from the public method.
+    """
+
     python_type: str | None = None
     default: Any = MISSING
     python_name: str | None = None
@@ -228,6 +280,15 @@ class ParameterOverride:
 
 @dataclass(frozen=True)
 class FieldOverride:
+    """Describe a Torn-specific override for a generated model field.
+
+    Attributes:
+        python_name: Replacement Python field name, if any.
+        aliases: Accepted wire-name aliases.
+        python_type: Replacement annotation, if any.
+        default: Replacement default value, if any.
+    """
+
     python_name: str | None = None
     aliases: tuple[str, ...] = ()
     python_type: str | None = None
@@ -236,6 +297,19 @@ class FieldOverride:
 
 @dataclass(frozen=True)
 class EndpointOverride:
+    """Describe a Torn-specific override for a generated endpoint.
+
+    Attributes:
+        skip: Whether generation should omit the endpoint.
+        name: Replacement public method name.
+        response_model: Replacement public response model name.
+        extract: Response key to extract before parsing.
+        force_no_extract: Whether to parse the full response payload.
+        custom_extractor: Handwritten extractor method name.
+        wrapper_method: Required TornAPIWrapper method name.
+        allow_merge: Whether compatible operations may be merged.
+    """
+
     skip: bool = False
     name: str | None = None
     response_model: str | None = None
@@ -247,6 +321,15 @@ class EndpointOverride:
 
 
 class TornOverrides:
+    """Apply Torn-specific naming, field, and endpoint generation policy.
+
+    Attributes:
+        parameter_overrides: Parameter-component generation overrides.
+        literal_alias_names: Explicit names for generated Literal aliases.
+        field_overrides: Model-field generation overrides.
+        endpoint_overrides: Resource endpoint generation overrides.
+    """
+
     """All non-generic Torn decisions belong here, not in renderers."""
 
     # Component parameter/schema name -> ergonomic SDK behavior.
@@ -307,12 +390,38 @@ class TornOverrides:
     def parameter(
         self, component_name: str | None
     ) -> ParameterOverride | None:
+        """Return the configured override for a parameter component.
+
+        Args:
+            component_name: OpenAPI parameter component name.
+
+        Returns:
+            Configured override, if one exists.
+        """
         return self.parameter_overrides.get(component_name or "")
 
     def field(self, model_name: str, wire_name: str) -> FieldOverride | None:
+        """Return the configured override for a generated model field.
+
+        Args:
+            model_name: Generated model name.
+            wire_name: Original API field name.
+
+        Returns:
+            Configured override, if one exists.
+        """
         return self.field_overrides.get((model_name, wire_name))
 
     def endpoint(self, tag: str, selection: str) -> EndpointOverride:
+        """Return the configured override for a Torn tag/selection pair.
+
+        Args:
+            tag: Normalized resource tag.
+            selection: Derived endpoint selection.
+
+        Returns:
+            Endpoint override, including a default when none is configured.
+        """
         if (
             selection == "generic"
             and (tag, selection) not in self.endpoint_overrides
@@ -325,6 +434,14 @@ class TornOverrides:
         )
 
     def literal_name(self, source_name: str) -> str:
+        """Return the preferred Python alias for an enum-like schema.
+
+        Args:
+            source_name: OpenAPI schema component name.
+
+        Returns:
+            Configured or convention-derived alias name.
+        """
         return self.literal_alias_names.get(
             source_name, PythonNames.enum_alias(source_name)
         )
@@ -332,6 +449,17 @@ class TornOverrides:
 
 @dataclass(frozen=True)
 class RawOperation:
+    """Describe one OpenAPI operation considered during SDK generation.
+
+    Attributes:
+        tag: Normalized OpenAPI resource tag.
+        path: Source OpenAPI path template.
+        http_method: Lowercase HTTP method.
+        selection: Derived SDK endpoint selection.
+        operation_id: OpenAPI operation identifier, if supplied.
+        operation: Raw OpenAPI operation mapping.
+    """
+
     tag: str
     path: str
     http_method: str
@@ -342,10 +470,22 @@ class RawOperation:
 
 @dataclass(frozen=True)
 class TypeRef:
+    """Describe a resolved Python type annotation and any Literal aliases.
+
+    Attributes:
+        code: Renderable Python annotation.
+        aliases: Literal aliases required by the annotation.
+    """
+
     code: str
     aliases: frozenset[str] = frozenset()
 
     def optional(self) -> "TypeRef":
+        """Return this type widened to allow `None`.
+
+        Returns:
+            This reference with ``None`` included in its annotation.
+        """
         if "None" in self.code:
             return self
         return TypeRef(f"{self.code} | None", self.aliases)
@@ -353,6 +493,18 @@ class TypeRef:
 
 @dataclass(frozen=True)
 class ParameterIR:
+    """Describe one normalized SDK method parameter.
+
+    Attributes:
+        wire_name: Original API parameter name.
+        python_name: Public Python parameter name.
+        location: OpenAPI parameter location.
+        type_ref: Resolved Python annotation.
+        required: Whether callers must supply the parameter.
+        default: Generated default value, if any.
+        source_component: Source OpenAPI component name, if any.
+    """
+
     wire_name: str
     python_name: str
     location: Literal["path", "query"]
@@ -364,6 +516,14 @@ class ParameterIR:
 
 @dataclass(frozen=True)
 class ExtractionIR:
+    """Describe how an endpoint response should be extracted before parsing.
+
+    Attributes:
+        kind: Extraction strategy identifier.
+        key: Response key used by key-based extraction.
+        extractor: Handwritten extractor name for custom extraction.
+    """
+
     kind: Literal["key", "none", "custom"]
     key: str | None = None
     extractor: str | None = None
@@ -371,6 +531,17 @@ class ExtractionIR:
 
 @dataclass(frozen=True)
 class ResponsePlan:
+    """Describe the generated response-model strategy for one endpoint.
+
+    Attributes:
+        response_component: OpenAPI response component name, if any.
+        source_schema: Original response schema.
+        model_schema: Schema rendered as the public model.
+        model_source_component: Source component for the rendered model.
+        public_model_name: Public Pydantic model name.
+        extraction: Payload extraction strategy.
+    """
+
     response_component: str | None
     source_schema: Mapping[str, Any]
     model_schema: Mapping[str, Any]
@@ -381,6 +552,20 @@ class ResponsePlan:
 
 @dataclass(frozen=True)
 class EndpointIR:
+    """Describe one generated SDK endpoint method.
+
+    Attributes:
+        tag: Resource tag that owns the endpoint.
+        name: Public SDK method name.
+        source_paths: OpenAPI paths represented by the method.
+        operation_ids: Source OpenAPI operation identifiers.
+        parameters: Normalized public method parameters.
+        response: Response model and extraction plan.
+        wrapper_method: TornAPIWrapper method used to make the request.
+        stability: OpenAPI stability annotation, if supplied.
+        documentation: OpenAPI endpoint description, if supplied.
+    """
+
     tag: str
     name: str
     source_paths: tuple[str, ...]
@@ -394,42 +579,87 @@ class EndpointIR:
 
 @dataclass(frozen=True)
 class TagIR:
+    """Group generated SDK endpoints for one Torn resource tag.
+
+    Attributes:
+        name: Normalized resource tag name.
+        endpoints: Generated endpoint methods for the tag.
+    """
+
     name: str
     endpoints: tuple[EndpointIR, ...]
 
 
 @dataclass
 class GenerationPlan:
+    """Collect generated SDK endpoint groups and review warnings.
+
+    Attributes:
+        tags: Generated endpoint groups.
+        warnings: Non-fatal decisions requiring review.
+    """
+
     tags: list[TagIR] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class ResourceSurface:
-    """Public resource modules that currently exist or will be scaffolded."""
+    """Public resource modules that currently exist or will be scaffolded.
+
+    Attributes:
+        sync_tags: Tags with synchronous public resource modules.
+        async_tags: Tags with asynchronous public resource modules.
+    """
 
     sync_tags: tuple[str, ...] = ()
     async_tags: tuple[str, ...] = ()
 
     @property
     def modules(self) -> tuple[str, ...]:
+        """Return sorted public resource module names for both client modes.
+
+        Returns:
+            Combined synchronous and asynchronous module basenames.
+        """
         names = [*self.sync_tags, *(f"{tag}_async" for tag in self.async_tags)]
         return tuple(sorted(names))
 
 
 @dataclass(frozen=True)
 class LiteralAlias:
+    """Describe one generated `typing.Literal` alias.
+
+    Attributes:
+        name: Public Python alias name.
+        values: Permitted literal values.
+    """
+
     name: str
     values: tuple[Any, ...]
 
 
 class LiteralRegistry:
+    """Track reusable Literal aliases discovered during generation."""
+
     def __init__(self, overrides: TornOverrides) -> None:
         self.overrides = overrides
         self._aliases: dict[str, LiteralAlias] = {}
         self._signature_to_name: dict[tuple[Any, ...], str] = {}
 
     def register(self, source_name: str, values: Sequence[Any]) -> str:
+        """Register or reuse a Literal alias for the given values.
+
+        Args:
+            source_name: Source OpenAPI component name.
+            values: Permitted enum or constant values.
+
+        Returns:
+            Public alias name for the values.
+
+        Raises:
+            ReviewRequired: If the preferred alias has conflicting values.
+        """
         signature = tuple(values)
         preferred = self.overrides.literal_name(source_name)
         if preferred in self._aliases:
@@ -453,10 +683,17 @@ class LiteralRegistry:
 
     @property
     def aliases(self) -> tuple[LiteralAlias, ...]:
+        """Return registered Literal aliases in deterministic name order.
+
+        Returns:
+            Registered aliases sorted by public name.
+        """
         return tuple(self._aliases[name] for name in sorted(self._aliases))
 
 
 class SchemaTypeResolver:
+    """Resolve OpenAPI schemas into Python type annotations."""
+
     def __init__(
         self,
         document: OpenAPIDocument,
@@ -470,6 +707,18 @@ class SchemaTypeResolver:
     def resolve_type(
         self, schema: Mapping[str, Any], *, source_name: str
     ) -> TypeRef:
+        """Resolve a schema node into a Python annotation reference.
+
+        Args:
+            schema: OpenAPI schema node to resolve.
+            source_name: Component or contextual name for generated aliases.
+
+        Returns:
+            Renderable Python type reference.
+
+        Raises:
+            ReviewRequired: If the schema cannot be represented safely.
+        """
         ref_name = self.refs.ref_name(schema)
         if ref_name:
             target = self.refs.resolve(schema)
@@ -620,6 +869,8 @@ class SchemaTypeResolver:
 
 
 class EndpointDiscovery:
+    """Discover supported OpenAPI operations grouped by Torn resource tag."""
+
     HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 
     def __init__(self, document: OpenAPIDocument) -> None:
@@ -628,6 +879,14 @@ class EndpointDiscovery:
     def discover(
         self, selected_tags: set[str] | None = None
     ) -> list[RawOperation]:
+        """Return supported OpenAPI operations for the selected tags.
+
+        Args:
+            selected_tags: Optional normalized resource tags to include.
+
+        Returns:
+            Discovered supported OpenAPI operations.
+        """
         results: list[RawOperation] = []
         normalized_filter = (
             {PythonNames.snake(t) for t in selected_tags}
@@ -667,6 +926,15 @@ class EndpointDiscovery:
 
     @staticmethod
     def selection(path: str, tag: str) -> str:
+        """Derive the SDK selection name from an OpenAPI path.
+
+        Args:
+            path: OpenAPI path template.
+            tag: Normalized resource tag.
+
+        Returns:
+            Derived normalized endpoint selection.
+        """
         parts = [part for part in path.strip("/").split("/") if part]
         static = [
             part
@@ -683,6 +951,16 @@ class EndpointDiscovery:
 
 @dataclass(frozen=True)
 class ParameterCandidate:
+    """Describe one unresolved OpenAPI parameter before signature merging.
+
+    Attributes:
+        component_name: Source component name, if referenced.
+        wire_name: Original API parameter name.
+        location: OpenAPI parameter location.
+        required: Whether the source contract requires it.
+        schema: Resolved parameter schema.
+    """
+
     component_name: str | None
     wire_name: str
     location: str
@@ -691,6 +969,8 @@ class ParameterCandidate:
 
 
 class ParameterNormalizer:
+    """Normalize OpenAPI parameters into Torn SDK Python signatures."""
+
     def __init__(
         self,
         refs: RefResolver,
@@ -702,6 +982,17 @@ class ParameterNormalizer:
         self.overrides = overrides
 
     def parse_operation(self, raw: RawOperation) -> list[ParameterCandidate]:
+        """Parse one OpenAPI operation into normalized parameter candidates.
+
+        Args:
+            raw: Discovered OpenAPI operation.
+
+        Returns:
+            Supported path and query parameter candidates.
+
+        Raises:
+            ReviewRequired: If a parameter cannot be normalized safely.
+        """
         result: list[ParameterCandidate] = []
         for parameter_node in raw.operation.get("parameters", []):
             if not isinstance(parameter_node, dict):
@@ -741,6 +1032,19 @@ class ParameterNormalizer:
     def merge(
         self, tag: str, raw_ops: Sequence[RawOperation]
     ) -> tuple[ParameterIR, ...]:
+        """Merge multiple route variants into one SDK method signature.
+
+        Args:
+            tag: Resource tag that owns the operations.
+            raw_ops: Operations represented by one SDK endpoint.
+
+        Returns:
+            Shared normalized SDK parameters.
+
+        Raises:
+            MergeConflict: If operation parameters are incompatible.
+            ReviewRequired: If a parameter cannot be represented safely.
+        """
         per_operation = [self.parse_operation(op) for op in raw_ops]
         keys: list[tuple[str, str]] = []
         for candidates in per_operation:
@@ -834,12 +1138,22 @@ class ParameterNormalizer:
 
 @dataclass(frozen=True)
 class WrapperEndpointSupport:
+    """Describe the wrapper method and parameters matched for an endpoint.
+
+    Attributes:
+        method_name: TornAPIWrapper method name.
+        parameters: Wrapper-compatible SDK parameters.
+        notes: Compatibility notes retained in reports.
+    """
+
     method_name: str
     parameters: tuple[ParameterIR, ...]
     notes: tuple[str, ...] = ()
 
 
 class TornAPIWrapperInspector:
+    """Match OpenAPI operations to callable TornAPIWrapper endpoint methods."""
+
     """Use installed TornAPIWrapper as the transport/callable source of truth.
 
     OpenAPI names and TornAPIWrapper method names are intentionally treated as
@@ -894,6 +1208,20 @@ class TornAPIWrapperInspector:
         parameters: Sequence[ParameterIR],
         source_paths: Sequence[str] = (),
     ) -> WrapperEndpointSupport:
+        """Match an SDK endpoint to TornAPIWrapper sync and async methods.
+
+        Args:
+            tag: Resource tag to inspect.
+            preferred_method: Preferred wrapper method name.
+            parameters: Normalized SDK method parameters.
+            source_paths: OpenAPI paths represented by the endpoint.
+
+        Returns:
+            Compatible wrapper endpoint support details.
+
+        Raises:
+            WrapperUnsupported: If no wrapper method can serve the endpoint.
+        """
         if not self.enabled:
             return WrapperEndpointSupport(
                 preferred_method,
@@ -1197,6 +1525,8 @@ class TornAPIWrapperInspector:
 
 
 class ResponsePlanner:
+    """Plan response extraction and generated Pydantic model surfaces."""
+
     def __init__(self, refs: RefResolver, overrides: TornOverrides) -> None:
         self.refs = refs
         self.overrides = overrides
@@ -1204,6 +1534,20 @@ class ResponsePlanner:
     def plan(
         self, tag: str, selection: str, raw_ops: Sequence[RawOperation]
     ) -> ResponsePlan:
+        """Plan response extraction and model naming for an endpoint.
+
+        Args:
+            tag: Resource tag that owns the endpoint.
+            selection: Derived endpoint selection.
+            raw_ops: OpenAPI operations represented by the endpoint.
+
+        Returns:
+            Response model and extraction strategy.
+
+        Raises:
+            MergeConflict: If response variants cannot share extraction.
+            ReviewRequired: If no safe JSON response strategy exists.
+        """
         schemas = [self._success_schema(op) for op in raw_ops]
         resolved_schemas: list[Mapping[str, Any]] = []
         for schema in schemas:
@@ -1414,6 +1758,8 @@ class ResponsePlanner:
 
 
 class IRBuilder:
+    """Build the normalized intermediate representation for SDK generation."""
+
     def __init__(
         self,
         discovery: EndpointDiscovery,
@@ -1432,6 +1778,18 @@ class IRBuilder:
         self.strict = strict
 
     def build(self, selected_tags: set[str] | None = None) -> GenerationPlan:
+        """Build the normalized SDK intermediate representation.
+
+        Args:
+            selected_tags: Optional normalized resource tags to include.
+
+        Returns:
+            Generated endpoint groups and non-fatal review warnings.
+
+        Raises:
+            MergeConflict: If operations cannot form one endpoint.
+            ReviewRequired: If strict generation finds an unsafe endpoint.
+        """
         raw = self.discovery.discover(selected_tags)
         grouped: dict[tuple[str, str], list[RawOperation]] = defaultdict(list)
         for operation in raw:
@@ -1548,12 +1906,22 @@ class IRBuilder:
 
 @dataclass
 class ImportSet:
+    """Collect imports required by a generated model module.
+
+    Attributes:
+        typing: Names imported from ``typing``.
+        pydantic: Names imported from ``pydantic``.
+        type_aliases: Generated type aliases imported by the module.
+    """
+
     typing: set[str] = field(default_factory=set)
     pydantic: set[str] = field(default_factory=set)
     type_aliases: set[str] = field(default_factory=set)
 
 
 class ModelRenderer:
+    """Render OpenAPI response schemas as typed Pydantic model modules."""
+
     def __init__(
         self,
         document: OpenAPIDocument,
@@ -1568,6 +1936,17 @@ class ModelRenderer:
         self._inline_models: dict[str, Mapping[str, Any]] = {}
 
     def render_endpoint_model(self, endpoint: EndpointIR) -> str:
+        """Render the Pydantic model module for one generated endpoint.
+
+        Args:
+            endpoint: Normalized endpoint to render.
+
+        Returns:
+            Complete generated model module source.
+
+        Raises:
+            ReviewRequired: If the endpoint schema cannot be rendered safely.
+        """
         imports = ImportSet()
         root_name = endpoint.response.public_model_name
         root_schema = endpoint.response.model_schema
@@ -2149,7 +2528,17 @@ class ModelRenderer:
 
 
 class TypesRenderer:
+    """Render shared Literal aliases used by generated SDK modules."""
+
     def render(self, aliases: Sequence[LiteralAlias]) -> str:
+        """Render the shared `types.py` module for Literal aliases.
+
+        Args:
+            aliases: Literal aliases to export.
+
+        Returns:
+            Complete generated ``types.py`` module source.
+        """
         lines = generated_module_header(
             "Literal type aliases generated from the Torn OpenAPI specification."
         )
@@ -2164,7 +2553,17 @@ class TypesRenderer:
 
 
 class ModelIndexRenderer:
+    """Render public response-model exports for a Torn resource tag."""
+
     def render(self, endpoints: Sequence[EndpointIR]) -> str:
+        """Render the model package index for one resource tag.
+
+        Args:
+            endpoints: Generated endpoints whose response models are exported.
+
+        Returns:
+            Complete tag model package initializer source.
+        """
         entries = sorted(
             {
                 (endpoint.name, endpoint.response.public_model_name)
@@ -2185,10 +2584,20 @@ class ModelIndexRenderer:
 
 
 class ResourceMixinRenderer:
+    """Render typed synchronous or asynchronous endpoint resource mixins."""
+
     def __init__(self, *, async_mode: bool) -> None:
         self.async_mode = async_mode
 
     def render(self, tag: TagIR) -> str:
+        """Render the generated resource mixin for one Torn tag.
+
+        Args:
+            tag: Generated endpoints for one resource tag.
+
+        Returns:
+            Complete generated resource mixin source.
+        """
         tag_pascal = PythonNames.pascal(tag.name)
         class_name = (
             f"GeneratedAsync{tag_pascal}ResourceMixin"
@@ -2343,6 +2752,15 @@ class ResourceScaffoldRenderer:
     """Render public resources registered with the SDK resource registry."""
 
     def render(self, tag: str, *, async_mode: bool) -> str:
+        """Render a public resource scaffold for a Torn tag.
+
+        Args:
+            tag: Normalized resource tag.
+            async_mode: Whether to render the asynchronous resource.
+
+        Returns:
+            Complete public resource module source.
+        """
         pascal = PythonNames.pascal(tag)
         suffix = "Async" if async_mode else ""
         wrapper_class = (
@@ -2404,6 +2822,14 @@ class ResourcePackageRenderer:
     """Render resources/__init__.py so importing torn_sdk.resources registers all resources."""
 
     def render(self, surface: ResourceSurface) -> str:
+        """Render the public resource package initializer.
+
+        Args:
+            surface: Public resource modules to import.
+
+        Returns:
+            Complete ``resources`` package initializer source.
+        """
         lines = generated_module_header(
             "Resource registrations generated from the Torn OpenAPI specification."
         )
@@ -2441,6 +2867,15 @@ class ClientRenderer:
         *,
         customizations: ClientCustomizations = ClientCustomizations(),
     ) -> str:
+        """Render either the sync or async client module for the given tags.
+
+        Args:
+            tags: Resource tags exposed by the client.
+            customizations: Preserved user-owned client source regions.
+
+        Returns:
+            Complete generated client module source.
+        """
         ordered_tags = tuple(sorted(tags))
         if self.async_mode:
             return self._render_async(ordered_tags, customizations)
@@ -2673,6 +3108,8 @@ class ClientRenderer:
 
 
 class ResourceSurfacePlanner:
+    """Determine public resource modules and client resource attributes."""
+
     """Determine which public resource modules are safe to import into package/client surfaces."""
 
     def __init__(self, sdk_root: Path) -> None:
@@ -2685,6 +3122,16 @@ class ResourceSurfacePlanner:
         *,
         scaffold_resources: bool,
     ) -> ResourceSurface:
+        """Determine which public resource modules should be imported.
+
+        Args:
+            global_plan: Complete discovered SDK plan.
+            emission_plan: Plan being emitted by this invocation.
+            scaffold_resources: Whether missing resource modules will be scaffolded.
+
+        Returns:
+            Public synchronous and asynchronous resource module surface.
+        """
         known_tags = {tag.name for tag in global_plan.tags}
         emitted_tags = {tag.name for tag in emission_plan.tags}
 
@@ -2711,7 +3158,17 @@ class ResourceSurfacePlanner:
 
 
 class ReportRenderer:
+    """Render a human-readable SDK generation report."""
+
     def render(self, plan: GenerationPlan) -> str:
+        """Render a text report for the generated SDK plan.
+
+        Args:
+            plan: Generated SDK endpoint plan.
+
+        Returns:
+            Human-readable SDK generation report.
+        """
         lines: list[str] = []
         for tag in plan.tags:
             lines.append(tag.name.upper())
@@ -2753,6 +3210,8 @@ class ReportRenderer:
 
 
 class TornSDKGenerator:
+    """Coordinate OpenAPI-driven Torn SDK source generation."""
+
     def __init__(
         self,
         document: OpenAPIDocument,
@@ -2810,6 +3269,14 @@ class TornSDKGenerator:
     def build_plan(
         self, selected_tags: set[str] | None = None
     ) -> GenerationPlan:
+        """Build the SDK generation plan for the selected tags.
+
+        Args:
+            selected_tags: Optional normalized resource tags to include.
+
+        Returns:
+            Generated SDK endpoint plan.
+        """
         return self.ir_builder.build(selected_tags)
 
     @staticmethod
@@ -2860,6 +3327,17 @@ class TornSDKGenerator:
     def generate(
         self, selected_tags: set[str] | None = None
     ) -> tuple[GenerationPlan, GeneratedFileManager]:
+        """Generate SDK sources and return the plan plus file changes.
+
+        Args:
+            selected_tags: Optional normalized resource tags to generate.
+
+        Returns:
+            Generated SDK plan and tracked file changes.
+
+        Raises:
+            ReviewRequired: If strict generation finds an unsafe selected endpoint.
+        """
         # Always perform global discovery first. `types.py` is a package-global
         # artifact and must not shrink simply because this run selected one tag.
         global_plan = self._build_global_plan()

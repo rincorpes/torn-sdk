@@ -106,6 +106,16 @@ HTTP_METHODS = {
 
 @dataclass(frozen=True)
 class RawOperation:
+    """Describe one OpenAPI operation considered for mock generation.
+
+    Attributes:
+        tag: Normalized OpenAPI resource tag.
+        selection: Derived mock route selection.
+        path: Source OpenAPI path template.
+        http_method: Lowercase HTTP method.
+        operation: Raw OpenAPI operation mapping.
+    """
+
     tag: str
     selection: str
     path: str
@@ -115,6 +125,15 @@ class RawOperation:
 
 @dataclass(frozen=True)
 class ParameterSpec:
+    """Describe one request parameter needed by a mock route.
+
+    Attributes:
+        api_name: OpenAPI parameter name.
+        python_name: Wrapper-facing Python parameter name.
+        location: OpenAPI parameter location.
+        required: Whether the route requires the parameter.
+    """
+
     api_name: str
     python_name: str
     location: str
@@ -123,6 +142,15 @@ class ParameterSpec:
 
 @dataclass(frozen=True)
 class WrapperEndpoint:
+    """Describe the TornAPIWrapper endpoint that backs a mock route.
+
+    Attributes:
+        method_name: TornAPIWrapper method name.
+        request_path: Request path invoked by the wrapper method.
+        request_parameter_names: API-to-wrapper parameter-name mapping.
+        notes: Compatibility notes retained in reports.
+    """
+
     method_name: str
     request_path: str
     request_parameter_names: Mapping[str, str]
@@ -131,6 +159,15 @@ class WrapperEndpoint:
 
 @dataclass(frozen=True)
 class RouteVariant:
+    """Describe one OpenAPI path variant served by a mock route.
+
+    Attributes:
+        source_path: OpenAPI path template.
+        required_params: Request parameters required by this variant.
+        forbidden_params: Request parameters excluded by this variant.
+        response: Deterministic mock response payload.
+    """
+
     source_path: str
     required_params: tuple[str, ...]
     forbidden_params: tuple[str, ...]
@@ -139,6 +176,16 @@ class RouteVariant:
 
 @dataclass(frozen=True)
 class MockRoute:
+    """Describe one generated mock route and its supported variants.
+
+    Attributes:
+        tag: Resource tag that owns the route.
+        selection: SDK endpoint selection.
+        wrapper_method: TornAPIWrapper method intercepted by the mock.
+        request_path: Request path expected by the wrapper.
+        variants: Supported OpenAPI route variants.
+    """
+
     tag: str
     selection: str
     wrapper_method: str
@@ -148,12 +195,26 @@ class MockRoute:
 
 @dataclass(frozen=True)
 class TagSpec:
+    """Group generated mock routes for one Torn resource tag.
+
+    Attributes:
+        name: Normalized resource tag name.
+        routes: Generated mock routes for the tag.
+    """
+
     name: str
     routes: tuple[MockRoute, ...]
 
 
 @dataclass
 class GenerationPlan:
+    """Collect generated mock-route groups and review warnings.
+
+    Attributes:
+        tags: Generated mock-route groups.
+        warnings: Non-fatal decisions requiring review.
+    """
+
     tags: list[TagSpec] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -164,6 +225,8 @@ class GenerationPlan:
 
 
 class EndpointDiscovery:
+    """Discover OpenAPI operations for mock-route generation."""
+
     def __init__(self, document: OpenAPIDocument) -> None:
         self.document = document
 
@@ -171,6 +234,17 @@ class EndpointDiscovery:
         self,
         selected_tags: set[str] | None,
     ) -> list[RawOperation]:
+        """Return supported OpenAPI operations for the selected tags.
+
+        Args:
+            selected_tags: Optional normalized resource tags to include.
+
+        Returns:
+            Discovered supported OpenAPI operations.
+
+        Raises:
+            ReviewRequired: If an operation selection cannot be derived.
+        """
         result: list[RawOperation] = []
 
         for path, path_item in self.document.paths.items():
@@ -250,6 +324,8 @@ class EndpointDiscovery:
 
 
 class ParameterPlanner:
+    """Plan mock request parameters from OpenAPI operation contracts."""
+
     def __init__(self, document: OpenAPIDocument, refs: RefResolver) -> None:
         self.document = document
         self.refs = refs
@@ -258,6 +334,14 @@ class ParameterPlanner:
         self,
         raw: RawOperation,
     ) -> list[ParameterSpec]:
+        """Collect path and query parameters for one OpenAPI operation.
+
+        Args:
+            raw: Discovered OpenAPI operation.
+
+        Returns:
+            Unique path and query parameter specifications.
+        """
         path_item = self.document.paths.get(raw.path, {})
         inputs: list[Any] = []
 
@@ -314,6 +398,14 @@ class ParameterPlanner:
         self,
         operations: Sequence[RawOperation],
     ) -> list[ParameterSpec]:
+        """Merge parameters shared across route variants.
+
+        Args:
+            operations: OpenAPI operations represented by one mock route.
+
+        Returns:
+            Merged parameter specifications.
+        """
         merged: dict[tuple[str, str], ParameterSpec] = {}
         counts: dict[tuple[str, str], int] = defaultdict(int)
 
@@ -400,6 +492,21 @@ class TornAPIWrapperInspector:
         source_paths: Sequence[str],
         fallback_request_path: str,
     ) -> WrapperEndpoint:
+        """Match OpenAPI route data to a callable TornAPIWrapper endpoint.
+
+        Args:
+            tag: Resource tag to inspect.
+            preferred_method: Preferred wrapper method name.
+            openapi_parameters: Parameters derived from the OpenAPI route.
+            source_paths: OpenAPI paths represented by the endpoint.
+            fallback_request_path: Request path used without wrapper inspection.
+
+        Returns:
+            Compatible wrapper endpoint details.
+
+        Raises:
+            WrapperUnsupported: If no wrapper method can serve the endpoint.
+        """
         if not self.enabled:
             return WrapperEndpoint(
                 method_name=preferred_method,
@@ -729,6 +836,8 @@ class TornAPIWrapperInspector:
 
 
 class ResponsePlanner:
+    """Build deterministic mock response payloads from OpenAPI schemas."""
+
     def __init__(
         self,
         refs: RefResolver,
@@ -741,6 +850,17 @@ class ResponsePlanner:
         self,
         raw: RawOperation,
     ) -> Any:
+        """Build a deterministic mock response for one OpenAPI operation.
+
+        Args:
+            raw: OpenAPI operation whose success response is sampled.
+
+        Returns:
+            JSON-compatible deterministic response payload.
+
+        Raises:
+            ReviewRequired: If no supported JSON success response exists.
+        """
         schema = self._json_schema(raw)
 
         return self.examples.build(
@@ -811,6 +931,8 @@ class ResponsePlanner:
 
 
 class PlanBuilder:
+    """Build mock route plans from discovered OpenAPI operations."""
+
     def __init__(
         self,
         discovery: EndpointDiscovery,
@@ -830,6 +952,17 @@ class PlanBuilder:
         self,
         selected_tags: set[str] | None,
     ) -> GenerationPlan:
+        """Build the complete mock-generation plan for the selected tags.
+
+        Args:
+            selected_tags: Optional normalized resource tags to include.
+
+        Returns:
+            Generated mock-route plan.
+
+        Raises:
+            ReviewRequired: If strict mode encounters an unsupported route.
+        """
         raw = self.discovery.discover(selected_tags)
 
         groups: dict[
@@ -1024,6 +1157,8 @@ class PlanBuilder:
 
 
 class ModuleRenderer:
+    """Render the network-free TornAPIWrapper mock Python module."""
+
     def render(
         self,
         plan: GenerationPlan,
@@ -1031,6 +1166,16 @@ class ModuleRenderer:
         openapi_version: str,
         openapi_hash: str,
     ) -> str:
+        """Render the generated TornAPIWrapper mock module source.
+
+        Args:
+            plan: Generated mock-route plan.
+            openapi_version: Source OpenAPI version.
+            openapi_hash: Canonical source OpenAPI hash.
+
+        Returns:
+            Complete mock module source.
+        """
         lines: list[str] = [
             GENERATED_HEADER,
             "from __future__ import annotations",
@@ -1326,6 +1471,8 @@ class ModuleRenderer:
 
 
 class ReportRenderer:
+    """Render a readable report for mock generation results."""
+
     def render(
         self,
         plan: GenerationPlan,
@@ -1333,6 +1480,16 @@ class ReportRenderer:
         *,
         openapi_version: str,
     ) -> str:
+        """Render a text report describing generated mock routes.
+
+        Args:
+            plan: Generated mock-route plan.
+            example_warnings: Warnings from response example generation.
+            openapi_version: Source OpenAPI version.
+
+        Returns:
+            Human-readable mock-generation report.
+        """
         endpoint_count = sum(len(tag.routes) for tag in plan.tags)
 
         lines = [
@@ -1389,6 +1546,8 @@ class ReportRenderer:
 
 
 class FileWriter:
+    """Write generated mock modules with optional check-only behavior."""
+
     def write(
         self,
         path: Path,
@@ -1396,6 +1555,16 @@ class FileWriter:
         *,
         check: bool,
     ) -> bool:
+        """Write generated mock content and report whether it changed.
+
+        Args:
+            path: Destination generated module path.
+            content: Complete generated module source.
+            check: Whether to avoid writing stale content.
+
+        Returns:
+            Whether the generated content differs from the destination.
+        """
         previous = path.read_text(encoding="utf-8") if path.exists() else None
 
         changed = previous != content
@@ -1419,6 +1588,8 @@ class FileWriter:
 
 
 class TornMockGenerator:
+    """Coordinate OpenAPI-backed TornAPIWrapper mock generation."""
+
     def __init__(
         self,
         document: OpenAPIDocument,
@@ -1458,6 +1629,14 @@ class TornMockGenerator:
         self,
         selected_tags: set[str] | None = None,
     ) -> GenerationPlan:
+        """Build a normalized mock-generation plan for the selected tags.
+
+        Args:
+            selected_tags: Optional resource tags to include.
+
+        Returns:
+            Generated mock-route plan.
+        """
         normalized = (
             {PythonNames.snake(tag) for tag in selected_tags}
             if selected_tags
@@ -1474,6 +1653,18 @@ class TornMockGenerator:
         report_file: Path | None,
         check: bool,
     ) -> int:
+        """Generate the mock module, optionally print a report, and exit.
+
+        Args:
+            output: Destination mock module path.
+            selected_tags: Optional normalized resource tags to include.
+            report: Whether to print the generation report.
+            report_file: Optional report destination path.
+            check: Whether to fail if generated output is stale.
+
+        Returns:
+            Process exit status: ``0`` when clean and ``1`` when check fails.
+        """
         plan = self.builder.build(
             selected_tags,
         )

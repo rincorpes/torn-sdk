@@ -40,6 +40,14 @@ class PythonNames:
 
     @classmethod
     def snake(cls, value: str) -> str:
+        """Normalize arbitrary text into a snake_case Python name.
+
+        Args:
+            value: Source text to normalize.
+
+        Returns:
+            A valid, nonempty snake_case name.
+        """
         value = value.strip().replace("-", "_")
         value = cls._camel_boundary_1.sub(r"\1_\2", value)
         value = cls._camel_boundary_2.sub(r"\1_\2", value)
@@ -49,6 +57,14 @@ class PythonNames:
 
     @classmethod
     def pascal(cls, value: str) -> str:
+        """Normalize arbitrary text into a PascalCase Python name.
+
+        Args:
+            value: Source text to normalize.
+
+        Returns:
+            A valid, nonempty PascalCase name.
+        """
         parts = [part for part in cls.snake(value).split("_") if part]
         return (
             "".join(part[:1].upper() + part[1:] for part in parts) or "Value"
@@ -56,6 +72,14 @@ class PythonNames:
 
     @classmethod
     def identifier(cls, value: str) -> tuple[str, str | None]:
+        """Return a safe Python identifier and any required original alias.
+
+        Args:
+            value: OpenAPI name to convert.
+
+        Returns:
+            The Python identifier and the original name when an alias is needed.
+        """
         original = value
         if value.startswith("_"):
             value = value.lstrip("_") or "value"
@@ -68,6 +92,15 @@ class PythonNames:
 
     @classmethod
     def path_parameter(cls, name: str, tag: str) -> tuple[str, str | None]:
+        """Return a Python-safe name for an OpenAPI path parameter.
+
+        Args:
+            name: OpenAPI path parameter name.
+            tag: Resource tag used to disambiguate generic ``id`` parameters.
+
+        Returns:
+            The Python identifier and any required original alias.
+        """
         snake = cls.snake(name)
         if snake == "id":
             return f"{cls.snake(tag)}_id", name
@@ -75,6 +108,14 @@ class PythonNames:
 
     @classmethod
     def enum_alias(cls, source_name: str) -> str:
+        """Return the preferred Python alias name for an enum schema.
+
+        Args:
+            source_name: OpenAPI component name for the enum schema.
+
+        Returns:
+            The derived Python type-alias name.
+        """
         name = source_name
         if name.startswith("Api"):
             name = name[3:]
@@ -99,6 +140,18 @@ class OpenAPIDocument:
         url: str = SCHEMA_URL,
         user_agent: str = "torn-sdk-codegen/0.1.0",
     ) -> dict[str, Any]:
+        """Download the Torn OpenAPI document as a JSON object.
+
+        Args:
+            url: OpenAPI document URL.
+            user_agent: HTTP User-Agent header sent with the request.
+
+        Returns:
+            The decoded OpenAPI document.
+
+        Raises:
+            CodegenError: If the downloaded JSON root is not an object.
+        """
         request = urllib.request.Request(
             url,
             headers={"User-Agent": user_agent},
@@ -116,6 +169,18 @@ class OpenAPIDocument:
         *,
         download_if_missing: bool = True,
     ) -> "OpenAPIDocument":
+        """Load an OpenAPI document from disk, downloading it if needed.
+
+        Args:
+            path: Local OpenAPI JSON path.
+            download_if_missing: Whether a missing document may be downloaded.
+
+        Returns:
+            The loaded OpenAPI document wrapper.
+
+        Raises:
+            CodegenError: If the document cannot be loaded or is invalid.
+        """
         if path.exists():
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
@@ -137,22 +202,47 @@ class OpenAPIDocument:
 
     @property
     def paths(self) -> Mapping[str, Any]:
+        """Return the OpenAPI paths collection.
+
+        Returns:
+            Mapping of path templates to OpenAPI path items.
+        """
         return self.data.get("paths", {})
 
     @property
     def schemas(self) -> Mapping[str, Any]:
+        """Return the OpenAPI component schemas collection.
+
+        Returns:
+            Mapping of component schema names to schema definitions.
+        """
         return self.data.get("components", {}).get("schemas", {})
 
     @property
     def parameters(self) -> Mapping[str, Any]:
+        """Return the OpenAPI component parameters collection.
+
+        Returns:
+            Mapping of component parameter names to definitions.
+        """
         return self.data.get("components", {}).get("parameters", {})
 
     @property
     def version(self) -> str:
+        """Return the declared OpenAPI version string.
+
+        Returns:
+            Document version, or ``"unknown"`` when absent.
+        """
         return str(self.data.get("info", {}).get("version", "unknown"))
 
     @property
     def source_hash(self) -> str:
+        """Return a stable hash of the loaded OpenAPI document.
+
+        Returns:
+            SHA-256 digest of the canonicalized document JSON.
+        """
         payload = json.dumps(self.data, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -164,6 +254,17 @@ class RefResolver:
         self.document = document
 
     def resolve_ref(self, ref: str) -> Any:
+        """Resolve an internal OpenAPI JSON pointer reference.
+
+        Args:
+            ref: Internal JSON pointer beginning with ``#/``.
+
+        Returns:
+            The referenced document value.
+
+        Raises:
+            ReviewRequired: If the reference is external or cannot be resolved.
+        """
         if not ref.startswith("#/"):
             raise ReviewRequired(f"External $ref is unsupported: {ref}")
 
@@ -177,6 +278,17 @@ class RefResolver:
         return current
 
     def resolve(self, node: Any) -> Any:
+        """Resolve a `$ref` node and merge any OpenAPI 3.1 sibling fields.
+
+        Args:
+            node: OpenAPI node that may contain a ``$ref``.
+
+        Returns:
+            The original node or its resolved, sibling-merged value.
+
+        Raises:
+            ReviewRequired: If a contained reference cannot be resolved.
+        """
         if not isinstance(node, dict) or "$ref" not in node:
             return node
 
@@ -194,6 +306,14 @@ class RefResolver:
 
     @staticmethod
     def ref_name(node: Any) -> str | None:
+        """Return the component name referenced by a `$ref` node.
+
+        Args:
+            node: OpenAPI node to inspect.
+
+        Returns:
+            The referenced component name, if present.
+        """
         if isinstance(node, dict) and isinstance(node.get("$ref"), str):
             return node["$ref"].rsplit("/", 1)[-1]
         return None
@@ -220,6 +340,17 @@ class SchemaExampleFactory:
         depth: int = 0,
         ref_stack: tuple[str, ...] = (),
     ) -> Any:
+        """Build a deterministic example value for an OpenAPI schema node.
+
+        Args:
+            schema: Schema or reference node to sample.
+            name_hint: Contextual name used for generated scalar values.
+            depth: Current recursive traversal depth.
+            ref_stack: References currently being resolved.
+
+        Returns:
+            A JSON-compatible example value.
+        """
         if depth > self.max_depth:
             self.warnings.append(
                 f"maximum schema depth exceeded at {name_hint}; using null"
@@ -474,6 +605,13 @@ class SchemaExampleFactory:
 
 @dataclass(frozen=True)
 class FileChange:
+    """Describe one generated file operation.
+
+    Attributes:
+        path: Absolute path of the affected file.
+        status: Planned operation, such as ``"create"`` or ``"unchanged"``.
+    """
+
     path: Path
     status: str
 
@@ -500,9 +638,20 @@ class GeneratedFileManager:
 
     @property
     def dirty(self) -> bool:
+        """Return whether any tracked file change is not unchanged.
+
+        Returns:
+            ``True`` when generation would alter or remove a file.
+        """
         return any(change.status != "unchanged" for change in self.changes)
 
     def emit(self, relative: Path, content: str) -> None:
+        """Create or update a generated file tracked by this manager.
+
+        Args:
+            relative: File path relative to the managed root.
+            content: Complete generated file content.
+        """
         path = self.root / relative
         self.expected.add(path)
         current = path.read_text(encoding="utf-8") if path.exists() else None
@@ -518,6 +667,12 @@ class GeneratedFileManager:
         path.write_text(content, encoding="utf-8")
 
     def scaffold(self, relative: Path, content: str) -> None:
+        """Create a file only when it does not already exist.
+
+        Args:
+            relative: File path relative to the managed root.
+            content: Initial file content.
+        """
         path = self.root / relative
         self.expected.add(path)
         if path.exists():
@@ -530,6 +685,11 @@ class GeneratedFileManager:
         path.write_text(content, encoding="utf-8")
 
     def find_stale(self, roots: Iterable[Path]) -> None:
+        """Mark generated Python files under the given roots as stale.
+
+        Args:
+            roots: Relative directories to search for generated Python files.
+        """
         for relative_root in roots:
             absolute = self.root / relative_root
             if not absolute.exists():
@@ -540,6 +700,11 @@ class GeneratedFileManager:
                 self._mark_stale(path)
 
     def find_stale_paths(self, paths: Iterable[Path]) -> None:
+        """Mark specific generated paths as stale when they were not emitted.
+
+        Args:
+            paths: Relative generated file paths to inspect.
+        """
         for relative in paths:
             path = self.root / relative
             if path.exists() and path not in self.expected:
@@ -558,13 +723,32 @@ class GeneratedFileManager:
 
 
 class ReportExporter:
+    """Write generation reports to user-selected paths."""
+
     def export(self, path: Path, content: str) -> Path:
+        """Write a report file and return its final path.
+
+        Args:
+            path: Destination report path.
+            content: Report text to write.
+
+        Returns:
+            The destination path.
+        """
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         return path
 
 
 def normalize_tags(tags: Sequence[str] | None) -> set[str] | None:
+    """Normalize optional tag filters into snake_case tag names.
+
+    Args:
+        tags: Optional raw resource tag filters.
+
+    Returns:
+        Normalized tags, or ``None`` when no filter was provided.
+    """
     if not tags:
         return None
     return {PythonNames.snake(tag) for tag in tags}

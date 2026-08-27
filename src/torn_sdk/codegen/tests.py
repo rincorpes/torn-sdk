@@ -28,6 +28,19 @@ GENERATED_HEADER = (
 
 @dataclass(frozen=True)
 class TestCaseIR:
+    """Describe one generated synchronous and asynchronous route test case.
+
+    Attributes:
+        tag: Resource tag under test.
+        endpoint: Generated SDK endpoint method name.
+        source_path: OpenAPI route variant represented by the case.
+        kwargs: Required method arguments and their sample values.
+        response_model: Expected parsed response model name.
+        expected_request_path: Wrapper request path expected for the call.
+        required_request_params: Request parameters that must be present.
+        forbidden_request_params: Request parameters that must be absent.
+    """
+
     tag: str
     endpoint: str
     source_path: str
@@ -39,6 +52,11 @@ class TestCaseIR:
 
     @property
     def test_id(self) -> str:
+        """Return a stable pytest case identifier for this route variant.
+
+        Returns:
+            Readable identifier derived from the endpoint and source path.
+        """
         path = self.source_path.strip("/").replace("/", "-")
         path = re.sub(r"[{}]", "", path)
         return f"{self.endpoint}-{path or 'root'}"
@@ -46,6 +64,15 @@ class TestCaseIR:
 
 @dataclass(frozen=True)
 class TestTagIR:
+    """Group generated test cases for one Torn resource tag.
+
+    Attributes:
+        name: Normalized resource tag name.
+        cases: Generated route test cases.
+        sync_enabled: Whether the synchronous resource is available.
+        async_enabled: Whether the asynchronous resource is available.
+    """
+
     name: str
     cases: tuple[TestCaseIR, ...]
     sync_enabled: bool
@@ -54,6 +81,13 @@ class TestTagIR:
 
 @dataclass
 class TestGenerationPlan:
+    """Collect generated test groups and review warnings.
+
+    Attributes:
+        tags: Generated test-case groups.
+        warnings: Non-fatal decisions requiring review.
+    """
+
     tags: list[TestTagIR] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -65,6 +99,18 @@ class SampleValueFactory:
         self._literals = {alias.name: alias.values for alias in literals}
 
     def value_for(self, type_code: str, *, name: str) -> Any:
+        """Return a deterministic sample value for a generated parameter.
+
+        Args:
+            type_code: Rendered Python annotation for the parameter.
+            name: Parameter name used to choose semantic string values.
+
+        Returns:
+            JSON-compatible sample argument value.
+
+        Raises:
+            ReviewRequired: If no trustworthy sample value can be generated.
+        """
         code = self._without_none(type_code.strip())
 
         literal = self._literals.get(code)
@@ -145,17 +191,37 @@ class SampleValueFactory:
 
 
 class ResourceAvailability:
+    """Inspect whether public synchronous and asynchronous resources exist."""
+
     def __init__(self, sdk_root: Path) -> None:
         self.sdk_root = sdk_root
 
     def sync(self, tag: str) -> bool:
+        """Return whether the synchronous public resource exists for a tag.
+
+        Args:
+            tag: Normalized resource tag.
+
+        Returns:
+            Whether the synchronous resource module exists.
+        """
         return (self.sdk_root / "resources" / f"{tag}.py").exists()
 
     def async_(self, tag: str) -> bool:
+        """Return whether the asynchronous public resource exists for a tag.
+
+        Args:
+            tag: Normalized resource tag.
+
+        Returns:
+            Whether the asynchronous resource module exists.
+        """
         return (self.sdk_root / "resources" / f"{tag}_async.py").exists()
 
 
 class TestPlanBuilder:
+    """Build pytest contract cases from SDK and mock generation plans."""
+
     """Build pytest cases from SDK endpoints that also exist in the mock plan."""
 
     _PATH_PARAM_RE = re.compile(r"\{([^}]+)\}")
@@ -176,6 +242,18 @@ class TestPlanBuilder:
         sdk_plan: SDKGenerationPlan,
         mock_plan: MockGenerationPlan,
     ) -> TestGenerationPlan:
+        """Build generated pytest cases from SDK and mock generation plans.
+
+        Args:
+            sdk_plan: Generated SDK endpoint plan.
+            mock_plan: Generated mock route plan.
+
+        Returns:
+            Generated pytest test-case plan.
+
+        Raises:
+            ReviewRequired: If strict mode encounters an unsupported test case.
+        """
         mock_routes = {
             (tag.name, route.selection): route
             for tag in mock_plan.tags
@@ -293,6 +371,8 @@ class TestPlanBuilder:
 
 
 class PytestModuleRenderer:
+    """Render pytest modules that exercise generated resource contracts."""
+
     def __init__(
         self,
         *,
@@ -301,6 +381,14 @@ class PytestModuleRenderer:
         self.mock_module = mock_module
 
     def render(self, tag: TestTagIR) -> str:
+        """Render one generated pytest module for a Torn resource tag.
+
+        Args:
+            tag: Generated test cases for one resource.
+
+        Returns:
+            Complete pytest module source.
+        """
         models = sorted({case.response_model for case in tag.cases})
 
         lines = [
@@ -447,7 +535,17 @@ class PytestModuleRenderer:
 
 
 class TestReportRenderer:
+    """Render a human-readable generated-test report."""
+
     def render(self, plan: TestGenerationPlan) -> str:
+        """Render a text report for generated pytest contract cases.
+
+        Args:
+            plan: Generated pytest test-case plan.
+
+        Returns:
+            Human-readable test-generation report.
+        """
         total = sum(len(tag.cases) for tag in plan.tags)
         lines = [
             "Torn generated pytest contract report",
@@ -479,6 +577,8 @@ class TestReportRenderer:
 
 
 class TornTestGenerator:
+    """Coordinate generation of Torn SDK pytest contract tests."""
+
     """Generate network-free pytest contract tests for generated SDK resources."""
 
     def __init__(
@@ -510,6 +610,14 @@ class TornTestGenerator:
         self,
         selected_tags: set[str] | None = None,
     ) -> TestGenerationPlan:
+        """Build the generated-test plan for the selected tags.
+
+        Args:
+            selected_tags: Optional normalized resource tags to include.
+
+        Returns:
+            Generated pytest test-case plan.
+        """
         sdk_generator = TornSDKGenerator(
             self.document,
             self.sdk_root,
@@ -537,6 +645,14 @@ class TornTestGenerator:
         self,
         selected_tags: set[str] | None = None,
     ) -> tuple[TestGenerationPlan, GeneratedFileManager]:
+        """Generate pytest contract modules and return the plan plus changes.
+
+        Args:
+            selected_tags: Optional normalized resource tags to generate.
+
+        Returns:
+            Generated test plan and tracked file changes.
+        """
         plan = self.build_plan(selected_tags)
         files = GeneratedFileManager(
             self.test_root,
